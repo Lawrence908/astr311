@@ -97,6 +97,12 @@
         }
         .ic-row input:focus { border-color: #6ac; outline: none; }
         .ic-buttons { display: flex; gap: 8px; margin-top: 12px; }
+        .ic-help {
+            margin-top: 6px;
+            font-size: 11px;
+            color: #7f8295;
+            line-height: 1.35;
+        }
         .ic-btn {
             flex: 1; padding: 8px; border: none; border-radius: 4px;
             cursor: pointer; font-size: 12px; font-weight: 600;
@@ -218,6 +224,11 @@
         <!-- Initial conditions tab (three-body only) -->
         <div id="initialTab" class="tab-content">
             <div id="icEditor"></div>
+            <div class="ic-row" style="margin-top:10px;">
+                <label for="runStepsInput" style="min-width:44px;">Steps</label>
+                <input type="number" id="runStepsInput" min="1" step="1" value="12000">
+            </div>
+            <div class="ic-help">Run length in physics steps. Increase this to simulate longer before playback stops.</div>
             <div class="ic-buttons">
                 <button class="ic-btn randomize" id="randomizeBtn">Randomize</button>
                 <button class="ic-btn run" id="runBtn">Run Simulation</button>
@@ -265,6 +276,7 @@
             positions: [[1.0, 3.0], [-2.0, -1.0], [1.0, -1.0]],
             velocities: [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
         };
+        const DEFAULT_THREE_BODY_STEPS = 12000;
 
         // ---- Three.js Setup ----
         const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -494,7 +506,20 @@
             const pos = icState.positions.flat().join(',');
             const vel = icState.velocities.flat().join(',');
             const mass = icState.masses.join(',');
-            fetchSimulation(`pos=${pos}&vel=${vel}&mass=${mass}&steps=3000`);
+            const stepsInput = document.getElementById('runStepsInput');
+            let steps = DEFAULT_THREE_BODY_STEPS;
+            if (stepsInput) {
+                const parsed = Number.parseInt(stepsInput.value, 10);
+                steps = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_THREE_BODY_STEPS;
+                stepsInput.value = String(steps);
+            }
+            const params = new URLSearchParams({
+                pos,
+                vel,
+                mass,
+                steps: String(steps),
+            });
+            fetchSimulation(params.toString());
         }
 
         function randomizeIC() {

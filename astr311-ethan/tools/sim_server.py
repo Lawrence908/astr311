@@ -146,6 +146,15 @@ def _parse_floats(s, n):
     return vals[:n]
 
 
+def _resolve_steps(raw_steps: str | None, default_steps: int) -> int:
+    if raw_steps is None:
+        return default_steps
+    steps = int(raw_steps)
+    if steps < 1:
+        raise ValueError("steps must be a positive integer")
+    return steps
+
+
 def _handle_simulate(scenario: str, qs: dict) -> dict:
     """Run a legacy scenario and return JSON-serialisable dict."""
     try:
@@ -154,12 +163,12 @@ def _handle_simulate(scenario: str, qs: dict) -> dict:
             vel = _parse_vecs(qs["vel"][0], 3) if "vel" in qs else None
             mass = _parse_floats(qs["mass"][0], 3) if "mass" in qs else None
             dt = float(qs["dt"][0]) if "dt" in qs else 0.0005
-            steps = int(qs["steps"][0]) if "steps" in qs else 12000
+            steps = _resolve_steps(qs["steps"][0] if "steps" in qs else None, default_steps=12000)
             bodies = _create_three_body(pos, vel, mass)
             history = _simulate(bodies, dt, steps, G=1.0, softening=0.05, record_every=20)
         elif scenario == "pluto_system":
             dt = float(qs["dt"][0]) if "dt" in qs else 1000
-            steps = int(qs["steps"][0]) if "steps" in qs else 4000
+            steps = _resolve_steps(qs["steps"][0] if "steps" in qs else None, default_steps=4000)
             bodies = _create_pluto_system()
             history = _simulate(bodies, dt, steps)
         else:

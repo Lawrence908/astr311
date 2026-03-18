@@ -30,7 +30,7 @@ def get_dashbaord():
 def get_simulation(
     scenario: str,
     dt: Optional[float] = None,
-    steps: int = 500,
+    steps: Optional[int] = None,
     pos: Optional[str] = None,
     vel: Optional[str] = None,
     mass: Optional[str] = None,
@@ -43,15 +43,13 @@ def get_simulation(
             bodies = create_three_body_problem(positions, velocities, masses)
             if dt is None:
                 dt = 0.0005
-            if steps == 500:
-                steps = 12000
+            steps = _resolve_steps(steps, default_steps=12000)
             history = simulate(bodies, dt, steps, G=1.0, softening=0.05, record_every=20)
         elif scenario == "pluto_system":
             bodies = create_pluto_system()
             if dt is None:
                 dt = 1000
-            if steps == 500:
-                steps = 4000
+            steps = _resolve_steps(steps, default_steps=4000)
             history = simulate(bodies, dt, steps)
         else:
             return {"error": "Unknown scenario"}
@@ -67,6 +65,14 @@ def _parse_vecs(s, n):
 def _parse_floats(s, n):
     vals = [float(x) for x in s.split(',')]
     return vals[:n]
+
+
+def _resolve_steps(steps: Optional[int], default_steps: int) -> int:
+    if steps is None:
+        return default_steps
+    if steps < 1:
+        raise ValueError("steps must be a positive integer")
+    return steps
 
 if __name__ == "__main__":
     import uvicorn
