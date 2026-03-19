@@ -164,11 +164,15 @@ def _handle_simulate(scenario: str, qs: dict) -> dict:
             mass = _parse_floats(qs["mass"][0], 3) if "mass" in qs else None
             dt = float(qs["dt"][0]) if "dt" in qs else 0.0005
             steps = _resolve_steps(qs["steps"][0] if "steps" in qs else None, default_steps=12000)
+            # Cap steps to prevent enormous JSON responses (120k steps = 6k snapshots at record_every=20)
+            steps = min(steps, 120000)
             bodies = _create_three_body(pos, vel, mass)
             history = _simulate(bodies, dt, steps, G=1.0, softening=0.05, record_every=20)
         elif scenario == "pluto_system":
             dt = float(qs["dt"][0]) if "dt" in qs else 1000
             steps = _resolve_steps(qs["steps"][0] if "steps" in qs else None, default_steps=4000)
+            # Cap steps to prevent enormous JSON responses
+            steps = min(steps, 50000)
             bodies = _create_pluto_system()
             history = _simulate(bodies, dt, steps)
         else:
@@ -441,11 +445,16 @@ class SimServerHandler(SimpleHTTPRequestHandler):
         print(format % args)
 
     def send_json(self, obj: dict, status: int = 200) -> None:
-        self.send_response(status)
-        self.send_cors_headers()
-        self.send_header("Content-Type", "application/json")
-        self.end_headers()
-        self.wfile.write(json.dumps(obj).encode("utf-8"))
+        try:
+            self.send_response(status)
+            self.send_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(obj).encode("utf-8"))
+        except (BrokenPipeError, ConnectionResetError) as e:
+            # Client disconnected before response was fully sent (e.g., timeout, user cancelled)
+            # This is expected for large responses; silently ignore
+            pass
 
     def send_cors_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
