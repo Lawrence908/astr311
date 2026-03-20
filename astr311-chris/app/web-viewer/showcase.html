@@ -432,7 +432,6 @@
     const dummy = new THREE.Object3D();
 
     let gridHelper = null;
-    const FOG_DENSITY = 0.018;
     const BG_COLOR = 0x0a0a12;
 
     function simToThree(p, is2D) {
@@ -504,7 +503,7 @@
     function init() {
       scene = new THREE.Scene();
       scene.background = new THREE.Color(BG_COLOR);
-      scene.fog = new THREE.FogExp2(BG_COLOR, FOG_DENSITY);
+      // No fog — keeps distant particles visible when zoomed out
       const main = document.getElementById('main');
       camera = new THREE.PerspectiveCamera(60, main.clientWidth / main.clientHeight, 0.01, 10000);
       camera.position.set(5, 4, 5);

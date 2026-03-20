@@ -1,5 +1,6 @@
 # Cosmic Origins sim server (ASTR 311): web viewer + run simulations from the browser.
-# Homelab: homelab-web network, port 8117, astr311.chrislawrence.ca
+# Homelab: homelab-web network, port 8117.
+# Routes: gravity.chrislawrence.ca (showcase), admin.gravity.chrislawrence.ca (EWB viewer).
 networks:
   web:
     external: true
