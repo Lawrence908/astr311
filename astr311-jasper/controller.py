@@ -61,6 +61,14 @@ SIMULATION_REGISTRY: Dict[str, Dict[str, Any]] = {
     "icon":        "🪐",
     "tags":        ["physics", "CPU", "N-body", "3D"],
     },
+    "chrissim": {
+        "id": "chrissim",
+        "name": "Big Bang Gravity Simulator",
+        "description": "N-body explosion from a point — particles expand outward while gravity pulls them back",
+        "module": "simulations.chris.app",
+        "icon": "💥",
+        "tags": ["physics", "CPU", "N-body", "explosion"],
+    },
 }
 
 # ============================================================================
