@@ -276,6 +276,70 @@ def make_cloud_3d(
     return ParticleState(positions=positions, velocities=velocities, masses=masses)
 
 
+def make_explosion_3d(
+    n_particles: int,
+    seed: int | None = None,
+    m_particle: float | None = None,
+    r_max: float = 0.5,
+    v_radial: float = 1.0,
+    velocity_noise: float = 0.05,
+    position_noise: float = 0.0,
+) -> ParticleState:
+    """Particles uniformly distributed in a small sphere, all moving radially outward.
+
+    Mimics a Big Bang-like explosion: no central object, no orbits -- just
+    mutual gravity acting on an expanding cloud.
+
+    Parameters
+    ----------
+    n_particles : int
+        Total number of particles (no special star particle).
+    r_max : float
+        Initial radius of the sphere containing all particles.
+    v_radial : float
+        Hubble-like expansion speed: each particle's radial velocity is
+        ``v_radial * (r / r_max)`` so outer shells move faster (homologous
+        expansion).  Increase for a faster bang; decrease to let gravity
+        recollapse sooner.
+    velocity_noise : float
+        Fractional random perturbation added to each velocity component.
+    position_noise : float
+        Absolute Gaussian noise added to positions (in same units as r_max).
+    """
+    rng = np.random.default_rng(seed)
+
+    u = rng.random(n_particles, dtype=float)
+    r = (u ** (1.0 / 3.0)) * r_max
+    phi = np.arccos(2.0 * rng.random(n_particles, dtype=float) - 1.0)
+    theta = 2.0 * np.pi * rng.random(n_particles, dtype=float)
+
+    x = r * np.sin(phi) * np.cos(theta)
+    y = r * np.sin(phi) * np.sin(theta)
+    z = r * np.cos(phi)
+    positions = np.column_stack([x, y, z]).astype(float)
+    if position_noise > 0:
+        positions += position_noise * rng.normal(size=(n_particles, 3))
+
+    r_safe = np.maximum(r, 1e-12)
+    speed = v_radial * (r / r_max)
+
+    r_hat_x = x / r_safe
+    r_hat_y = y / r_safe
+    r_hat_z = z / r_safe
+    vx = speed * r_hat_x
+    vy = speed * r_hat_y
+    vz = speed * r_hat_z
+    velocities = np.column_stack([vx, vy, vz]).astype(float)
+    if velocity_noise > 0:
+        velocities += velocity_noise * speed[:, None] * rng.normal(size=(n_particles, 3))
+
+    if m_particle is None:
+        m_particle = 1.0 / n_particles
+    masses = np.full(n_particles, m_particle, dtype=float)
+
+    return ParticleState(positions=positions, velocities=velocities, masses=masses)
+
+
 def make_uniform_2d(n: int, seed: int | None = None) -> ParticleState:
     """Return a nearly uniform 2D particle distribution with tiny noise.
 

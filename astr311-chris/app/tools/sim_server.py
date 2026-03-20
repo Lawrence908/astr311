@@ -44,7 +44,7 @@ def _parse_run_params(body: dict) -> tuple[dict, str | None]:
     if dim not in ("2d", "3d"):
         dim = "3d"
     ic = (body.get("ic") or "disk").lower()
-    if ic not in ("disk", "cloud"):
+    if ic not in ("disk", "cloud", "explosion"):
         ic = "disk"
     n = max(1, min(10000, int(body.get("n", 500))))
     steps = max(1, min(1_000_000, int(body.get("steps", 1000))))
@@ -69,6 +69,8 @@ def _parse_run_params(body: dict) -> tuple[dict, str | None]:
         r_collide = float(r_collide)
     M_halo = float(body.get("M_halo", 0.0))
     a_halo = float(body.get("a_halo", 5.0))
+    v_radial = float(body.get("v_radial", 1.0))
+    velocity_noise = float(body.get("velocity_noise", 0.05))
     return {
         "name": name,
         "dim": dim,
@@ -88,6 +90,8 @@ def _parse_run_params(body: dict) -> tuple[dict, str | None]:
         "r_collide": r_collide,
         "M_halo": M_halo,
         "a_halo": a_halo,
+        "v_radial": v_radial,
+        "velocity_noise": velocity_noise,
     }, None
 
 
@@ -110,6 +114,8 @@ def _build_run_cmd(params: dict) -> tuple[list[str], Path, Path]:
     M_halo = params["M_halo"]
     a_halo = params["a_halo"]
     use_gpu = params["gpu"]
+    v_radial = params["v_radial"]
+    velocity_noise = params["velocity_noise"]
     out_json = REPLAYS_DIR / f"{name}.json"
     temp_npz = REPLAYS_DIR / f"{name}.npz"
     python = sys.executable
@@ -137,13 +143,19 @@ def _build_run_cmd(params: dict) -> tuple[list[str], Path, Path]:
             "--save-replay", str(temp_npz),
             "--replay-every", str(replay_every),
             "--no-viz", "--n", str(n), "--steps", str(steps),
-            "--dt", str(dt), "--r-min", str(r_min), "--r-max", str(r_max),
-            "--softening", str(softening), "--M_star", str(M_star),
+            "--dt", str(dt), "--r-max", str(r_max),
+            "--softening", str(softening), "--seed", str(params["seed"]),
         ]
+        if ic == "explosion":
+            cmd.extend(["--ic", "explosion",
+                         "--v-radial", str(v_radial),
+                         "--velocity-noise", str(velocity_noise)])
+        else:
+            cmd.extend(["--r-min", str(r_min), "--M_star", str(M_star)])
+            if M_halo > 0:
+                cmd.extend(["--M-halo", str(M_halo), "--a-halo", str(a_halo)])
         if m_particle is not None:
             cmd.extend(["--m-particle", str(m_particle)])
-        if M_halo > 0:
-            cmd.extend(["--M-halo", str(M_halo), "--a-halo", str(a_halo)])
         if collisions:
             cmd.append("--collisions")
             if r_collide is not None:
@@ -255,6 +267,16 @@ def _run_worker() -> None:
                 _completed.append({"job_id": job_id, "name": name, "ok": False, "error": str(e)})
                 del _completed[:-_MAX_COMPLETED]
             continue
+
+        if params.get("ic") == "explosion":
+            try:
+                with open(out_json, "r") as f:
+                    replay_json = json.load(f)
+                replay_json["has_star"] = False
+                with open(out_json, "w") as f:
+                    json.dump(replay_json, f)
+            except Exception:
+                pass
 
         with _run_lock:
             _current_run = None

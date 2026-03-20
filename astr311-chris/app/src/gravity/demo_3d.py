@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from .collisions import resolve_collisions
 from .diagnostics import compute_angular_momentum, compute_total_energy
 from .forces_cpu import compute_halo_acceleration
-from .init_conditions import make_disk_3d
+from .init_conditions import make_disk_3d, make_explosion_3d
 from .integrators import leapfrog_step
 from .progress import report_progress
 from .replay import save_replay
@@ -26,14 +26,17 @@ from .viz_3d import LiveScatter3D
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Run 3D gravity demo (thick disk).")
-    p.add_argument("--n", type=int, default=200, help="Number of disk particles")
+    p = argparse.ArgumentParser(description="Run 3D gravity demo (thick disk or explosion).")
+    p.add_argument("--n", type=int, default=200, help="Number of particles")
     p.add_argument("--steps", type=int, default=500, help="Number of timesteps")
     p.add_argument("--dt", type=float, default=0.01, help="Timestep")
-    p.add_argument("--M_star", type=float, default=1.0, help="Central star mass (code units)")
-    p.add_argument("--m-particle", type=float, default=None, dest="m_particle", metavar="M", help="Mass per disk particle (code units); default 1/(N+1)")
+    p.add_argument("--ic", choices=["disk", "explosion"], default="disk", help="Initial condition: disk (star+disk) or explosion (Big Bang)")
+    p.add_argument("--M_star", type=float, default=1.0, help="Central star mass (code units, disk only)")
+    p.add_argument("--m-particle", type=float, default=None, dest="m_particle", metavar="M", help="Mass per particle (code units); default 1/(N+1)")
     p.add_argument("--r-min", type=float, default=0.5, dest="r_min", help="Disk inner radius")
-    p.add_argument("--r-max", type=float, default=2.0, dest="r_max", help="Disk outer radius")
+    p.add_argument("--r-max", type=float, default=2.0, dest="r_max", help="Disk outer radius / explosion sphere radius")
+    p.add_argument("--v-radial", type=float, default=1.0, dest="v_radial", help="Radial expansion speed (explosion only)")
+    p.add_argument("--velocity-noise", type=float, default=0.05, dest="velocity_noise", help="Fractional velocity noise (explosion only)")
     p.add_argument("--softening", type=float, default=0.05, help="Gravitational softening length ε")
     p.add_argument("--viz-every", type=int, default=2, help="Update plot every N steps")
     p.add_argument("--save-replay", type=str, default=None, metavar="PATH", help="Save replay .npz (3D positions) for web viewer")
@@ -44,6 +47,7 @@ def main() -> None:
     p.add_argument("--r-collide", type=float, default=None, metavar="R", help="Collision radius when --collisions (default 2*softening)")
     p.add_argument("--M-halo", type=float, default=0.0, dest="M_halo", help="Dark-matter halo mass (Hernquist profile, 0 = off)")
     p.add_argument("--a-halo", type=float, default=5.0, dest="a_halo", help="Halo scale radius (Hernquist)")
+    p.add_argument("--seed", type=int, default=42, help="Random seed")
     args = p.parse_args()
 
     softening = args.softening
@@ -60,22 +64,34 @@ def main() -> None:
     else:
         from .forces_cpu import compute_accelerations_vectorized
 
-    state = make_disk_3d(
-        args.n,
-        seed=42,
-        M_star=args.M_star,
-        m_particle=args.m_particle,
-        r_min=args.r_min,
-        r_max=args.r_max,
-        thickness=0.05,
-        M_halo=args.M_halo,
-        a_halo=args.a_halo,
-    )
+    is_explosion = (args.ic == "explosion")
+
+    if is_explosion:
+        state = make_explosion_3d(
+            args.n,
+            seed=args.seed,
+            m_particle=args.m_particle,
+            r_max=args.r_max,
+            v_radial=args.v_radial,
+            velocity_noise=args.velocity_noise,
+        )
+    else:
+        state = make_disk_3d(
+            args.n,
+            seed=args.seed,
+            M_star=args.M_star,
+            m_particle=args.m_particle,
+            r_min=args.r_min,
+            r_max=args.r_max,
+            thickness=0.05,
+            M_halo=args.M_halo,
+            a_halo=args.a_halo,
+        )
 
     M_halo = args.M_halo
     a_halo = args.a_halo
 
-    if M_halo > 0:
+    if not is_explosion and M_halo > 0:
         def accel_fn(s: ParticleState):
             a = compute_accelerations_vectorized(s, softening=softening, G=1.0)
             a += compute_halo_acceleration(s.positions, M_halo, a_halo, G=1.0)

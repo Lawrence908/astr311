@@ -441,7 +441,7 @@
         controls.target.set(0, 0, 0);
       };
       viewLockBtn.onclick = () => {
-        if (!starMesh) return;
+        if (!hasStar || !starMesh) return;
         viewLockedOn = !viewLockedOn;
         setLockButtonLabel();
         if (viewLockedOn) {
@@ -568,8 +568,11 @@
       return Math.max(MIN_PARTICLE_RADIUS, r);
     }
 
+    let hasStar = true;
+
     function buildParticles(positions, is2D, maxCapacity, particleRadius) {
-      const n = positions.length - 1;
+      const startIdx = hasStar ? 1 : 0;
+      const n = positions.length - startIdx;
       if (n <= 0) return null;
       const capacity = maxCapacity !== undefined ? Math.max(maxCapacity, n) : n;
       const radius = particleRadius || 0.04;
@@ -578,7 +581,7 @@
       const mesh = new THREE.InstancedMesh(geo, mat, capacity);
       mesh.count = n;
       for (let i = 0; i < n; i++) {
-        const p = positions[i + 1];
+        const p = positions[startIdx + i];
         const t = simToThree(p, is2D);
         dummy.position.set(t[0], t[1], t[2]);
         dummy.scale.set(radius, radius, radius);
@@ -618,7 +621,8 @@
       if (!replayData) return;
       const pos = replayData.positions[frameIndex];
       const is2D = pos[0].length === 2;
-      const n = pos.length - 1;
+      const startIdx = hasStar ? 1 : 0;
+      const n = pos.length - startIdx;
       const stepsArr = replayData.steps;
       const currentStep = stepsArr ? stepsArr[frameIndex] : frameIndex * 100;
       const dt = replayData.dt || 0.01;
@@ -636,9 +640,9 @@
           const step = stepsArr ? stepsArr[f] : f * 100;
           const pf = replayData.positions[f];
           const is2Df = pf[0].length === 2;
-          const nf = pf.length - 1;
+          const nf = pf.length - startIdx;
           for (let i = 0; i < Math.min(n, nf); i++) {
-            const p = pf[i + 1];
+            const p = pf[startIdx + i];
             trailHistory[i].push({ pos: simToThree(p, is2Df), step });
           }
         }
@@ -655,7 +659,7 @@
         particleInstances.count = n;
         const r = currentParticleRadius;
         for (let i = 0; i < n; i++) {
-          const t = simToThree(pos[i + 1], is2D);
+          const t = simToThree(pos[startIdx + i], is2D);
           dummy.position.set(t[0], t[1], t[2]);
           dummy.scale.set(r, r, r);
           dummy.updateMatrix();
@@ -663,7 +667,7 @@
         }
         particleInstances.instanceMatrix.needsUpdate = true;
       }
-      if (starMesh) {
+      if (starMesh && hasStar) {
         const tStar = simToThree(pos[0], is2D);
         starMesh.position.set(tStar[0], tStar[1], tStar[2]);
         if (viewLockedOn) {
@@ -675,19 +679,20 @@
     }
 
     function applyReplayData(data) {
-      // Use actual frame count so truncated or hand-edited JSON never runs past the array
       const numFrames = data.positions.length;
       data.n_snapshots = numFrames;
       if (!Array.isArray(data.steps) || data.steps.length !== numFrames) {
         data.steps = Array.from({ length: numFrames }, (_, i) => i * (data.replay_every ?? 20));
       }
       if (data.dt == null) data.dt = 0.01;
+      hasStar = data.has_star !== false;
       replayData = data;
       const frameIndex = 0;
       const is2D = data.positions[0][0].length === 2;
+      const startIdx = hasStar ? 1 : 0;
       let maxParticles = 0;
       for (let f = 0; f < data.n_snapshots; f++) {
-        const n = data.positions[f].length - 1;
+        const n = data.positions[f].length - startIdx;
         if (n > maxParticles) maxParticles = n;
       }
       if (trailLineMesh) {
@@ -707,33 +712,38 @@
       scene.add(trailLineMesh);
       const pos0 = data.positions[frameIndex];
       const is2D0 = pos0[0].length === 2;
-      const n0 = pos0.length - 1;
+      const n0 = pos0.length - startIdx;
       const step0 = (data.steps && data.steps[frameIndex] != null) ? data.steps[frameIndex] : frameIndex * 100;
       for (let i = 0; i < n0; i++) {
-        const p = pos0[i + 1];
+        const p = pos0[startIdx + i];
         trailHistory[i].push({ pos: simToThree(p, is2D0), step: step0 });
       }
       lastTrailFrameIndex = frameIndex;
-      // Compute mass-proportional sizes
-      let starMass = 1, particleMass = 0;
-      if (data.masses) {
+
+      let starMassVal = 1, particleMass = 0;
+      if (hasStar && data.masses) {
         if (data.variable_n && Array.isArray(data.masses[0])) {
-          starMass = data.masses[0][0] || 1;
+          starMassVal = data.masses[0][0] || 1;
           particleMass = data.masses[0].length > 1 ? data.masses[0][1] : 0;
         } else if (Array.isArray(data.masses)) {
-          starMass = data.masses[0] || 1;
+          starMassVal = data.masses[0] || 1;
           particleMass = data.masses.length > 1 ? data.masses[1] : 0;
         }
       }
-      currentParticleRadius = computeParticleRadius(starMass, particleMass);
-      const starRadius = BASE_STAR_RADIUS;
+      if (hasStar) {
+        currentParticleRadius = computeParticleRadius(starMassVal, particleMass);
+      } else {
+        currentParticleRadius = 0.04;
+      }
 
       if (particleInstances) scene.remove(particleInstances);
-      if (starMesh) scene.remove(starMesh);
+      if (starMesh) { scene.remove(starMesh); starMesh = null; }
       particleInstances = buildParticles(data.positions[frameIndex], is2D, maxParticles, currentParticleRadius);
-      starMesh = buildStar(data.positions[frameIndex], is2D, starRadius);
+      if (hasStar) {
+        starMesh = buildStar(data.positions[frameIndex], is2D, BASE_STAR_RADIUS);
+        scene.add(starMesh);
+      }
       if (particleInstances) scene.add(particleInstances);
-      scene.add(starMesh);
 
       const tl = document.getElementById('timeline');
       tl.min = 0;
@@ -751,8 +761,12 @@
         if (r > maxRadius) maxRadius = r;
       }
       const scaleEl = document.getElementById('scaleInfo');
-      const ratioStr = particleMass > 0 ? '  |  Mass ratio: ' + Math.round(starMass / particleMass) + ':1' : '';
-      if (scaleEl) scaleEl.textContent = 'Extent: ~' + maxRadius.toFixed(1) + ' units' + ratioStr;
+      if (hasStar) {
+        const ratioStr = particleMass > 0 ? '  |  Mass ratio: ' + Math.round(starMassVal / particleMass) + ':1' : '';
+        if (scaleEl) scaleEl.textContent = 'Extent: ~' + maxRadius.toFixed(1) + ' units' + ratioStr;
+      } else {
+        if (scaleEl) scaleEl.textContent = 'Explosion  |  Extent: ~' + maxRadius.toFixed(1) + ' units  |  ' + n0 + ' particles';
+      }
 
       const playBtn = document.getElementById('playBtn');
       const speedSelect = document.getElementById('speedSelect');
@@ -783,9 +797,10 @@
             }
           };
 
-      const nParts = data.variable_n ? data.positions[0].length - 1 : (data.n_particles || data.positions[0].length - 1);
+      const nParts = data.variable_n ? data.positions[0].length - startIdx : (data.n_particles || data.positions[0].length - startIdx);
+      const modeLabel = hasStar ? '' : '  [explosion]';
       document.getElementById('stepInfo').textContent =
-        `Step ${(data.steps && data.steps[0]) != null ? data.steps[0] : 0}  (${data.n_snapshots} snapshots, ${nParts} particles)  dt=${data.dt}`;
+        `Step ${(data.steps && data.steps[0]) != null ? data.steps[0] : 0}  (${data.n_snapshots} snapshots, ${nParts} particles)  dt=${data.dt}${modeLabel}`;
     }
 
     function loadReplay(url) {
