@@ -23,11 +23,13 @@ import importlib
 import os
 from typing import Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
+from dotenv import load_dotenv
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
 
+load_dotenv()
 SHARED_PASSWORD = os.environ.get("SIMLAB_PASSWORD")
 if not SHARED_PASSWORD:
     raise RuntimeError("SIMLAB_PASSWORD environment variable is not set")
