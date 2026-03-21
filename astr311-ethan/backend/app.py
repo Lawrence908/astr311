@@ -1,32 +1,51 @@
-from fastapi import FastAPI, Query
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
-from sim import simulate, create_three_body_problem, create_pluto_system, G_SI
+from pathlib import Path
 from typing import Optional
-import json
 
-app = FastAPI()
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
-#allow errbody to access
+from sim import simulate, create_three_body_problem, create_pluto_system
+
+
+BASE_DIR = Path(__file__).resolve().parent
+FRONTEND_DIR = BASE_DIR.parent / "frontend"
+
+app = FastAPI(title="Ethan N-Body Backend", version="1.0")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], #allow requests from anyone
-    allow_credentials=True, #cookie and auth headers can be sent
-    allow_methods=["*"], #allow all http methods
-    allow_headers=["*"] #allow all headers in requests
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-app.mount("/frontend", StaticFiles(directory="../frontend/"), name="frontend")
+app.mount("/frontend", StaticFiles(directory=str(FRONTEND_DIR)), name="frontend")
 
-#simple dashboard view
-@app.get("/", response_class=HTMLResponse)
-def get_dashbaord():
-    with open("../frontend/dashboard.html", "r") as f:
-        html_content = f.read()
-    return HTMLResponse(content=html_content)
 
-@app.get("/simulate/{scenario}")
+@app.get("/")
+def get_index():
+    return FileResponse(FRONTEND_DIR / "dashboard.html")
+
+
+@app.get("/dashboard")
+def get_dashboard():
+    return FileResponse(FRONTEND_DIR / "dashboard.html")
+
+
+@app.get("/sim")
+def get_sim_viewer():
+    return FileResponse(FRONTEND_DIR / "index.html")
+
+
+@app.get("/health")
+def health():
+    return {"ok": True}
+
+
+@app.get("/api/simulate/{scenario}")
 def get_simulation(
     scenario: str,
     dt: Optional[float] = None,
@@ -53,17 +72,38 @@ def get_simulation(
             history = simulate(bodies, dt, steps)
         else:
             return {"error": "Unknown scenario"}
-        
+
         return {"history": history, "steps": len(history), "scenario": scenario}
     except Exception as e:
         return {"error": str(e), "scenario": scenario}
-    
-def _parse_vecs(s, n):
-    vals = [float(x) for x in s.split(',')]
-    return [vals[i*2:(i+1)*2] for i in range(n)]
 
-def _parse_floats(s, n):
-    vals = [float(x) for x in s.split(',')]
+
+@app.get("/simulate/{scenario}")
+def get_simulation_legacy(
+    scenario: str,
+    dt: Optional[float] = None,
+    steps: Optional[int] = None,
+    pos: Optional[str] = None,
+    vel: Optional[str] = None,
+    mass: Optional[str] = None,
+):
+    return get_simulation(
+        scenario=scenario,
+        dt=dt,
+        steps=steps,
+        pos=pos,
+        vel=vel,
+        mass=mass,
+    )
+
+
+def _parse_vecs(s: str, n: int):
+    vals = [float(x) for x in s.split(",")]
+    return [vals[i * 2:(i + 1) * 2] for i in range(n)]
+
+
+def _parse_floats(s: str, n: int):
+    vals = [float(x) for x in s.split(",")]
     return vals[:n]
 
 
@@ -74,6 +114,8 @@ def _resolve_steps(steps: Optional[int], default_steps: int) -> int:
         raise ValueError("steps must be a positive integer")
     return steps
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
