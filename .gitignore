@@ -25,3 +25,6 @@ outputs/
 
 # Replays from sim server (bind mount when using compose)
 replays/
+
+# Environment variables
+.env
