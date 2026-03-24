@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N-Body Gravity Simulator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000;
+            color: #ccc;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+        canvas { display: block; position: absolute; top: 0; left: 0; }
+        #labelsContainer {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none; z-index: 5;
+        }
+
+        /* Top nav */
+        #topBar {
+            position: fixed; top: 0; right: 0;
+            display: flex; align-items: stretch;
+            z-index: 100;
+            background: rgba(15,15,20,0.85);
+            border-bottom-left-radius: 4px;
+        }
+        .nav-btn {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 8px 18px; color: #999; background: none; border: none;
+            cursor: pointer; font-size: 11px; border-bottom: 2px solid transparent; gap: 3px;
+        }
+        .nav-btn:hover { color: #ddd; }
+        .nav-btn.active { color: #fff; border-bottom-color: #6ac; }
+        .nav-btn .icon { font-size: 18px; }
+
+        /* Side panel */
+        #sidePanel {
+            position: fixed; top: 50px; right: 0; width: 320px;
+            max-height: calc(100vh - 90px);
+            background: rgba(18,18,24,0.95);
+            border-left: 1px solid #333; z-index: 90;
+            overflow-y: auto; display: none;
+        }
+        #sidePanel.open { display: block; }
+        .panel-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 10px; }
+        .panel-header h2 { font-size: 16px; font-weight: 600; color: #fff; }
+        .close-btn { background: none; border: none; color: #777; font-size: 20px; cursor: pointer; padding: 2px 6px; }
+        .close-btn:hover { color: #fff; }
+
+        .panel-tabs { display: flex; border-top: 1px solid #333; border-bottom: 1px solid #333; }
+        .panel-tab {
+            flex: 1; padding: 10px 8px; text-align: center;
+            background: none; border: none; color: #888;
+            cursor: pointer; font-size: 13px; border-bottom: 2px solid transparent;
+        }
+        .panel-tab:hover { color: #ccc; }
+        .panel-tab.active { color: #fff; border-bottom-color: #6ac; }
+
+        .tab-content { display: none; padding: 16px; }
+        .tab-content.active { display: block; }
+
+        .setting-group { margin-bottom: 16px; }
+        .setting-label {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 6px; font-size: 13px; color: #aaa;
+        }
+        .help-btn {
+            background: none; border: 1px solid #555; color: #888;
+            font-size: 10px; padding: 1px 5px; cursor: pointer; border-radius: 2px;
+        }
+        .setting-select {
+            width: 100%; padding: 7px 10px; background: #1a1a22;
+            color: #ccc; border: 1px solid #444; border-radius: 3px; font-size: 13px;
+        }
+        .setting-select:focus { border-color: #6ac; outline: none; }
+
+        .checkbox-row {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; color: #bbb; margin-bottom: 8px;
+        }
+        .checkbox-row input[type="checkbox"] { accent-color: #6ac; }
+
+        /* Initial conditions editor */
+        .ic-body { margin-bottom: 12px; padding: 10px; background: #1a1a22; border-radius: 4px; border-left: 3px solid #666; }
+        .ic-body h4 { font-size: 12px; margin-bottom: 6px; }
+        .ic-row { display: flex; gap: 6px; margin-bottom: 4px; align-items: center; }
+        .ic-row label { font-size: 11px; color: #888; min-width: 28px; }
+        .ic-row input {
+            flex: 1; padding: 4px 6px; background: #111; color: #ddd;
+            border: 1px solid #444; border-radius: 3px; font-size: 12px;
+            font-family: monospace;
+        }
+        .ic-row input:focus { border-color: #6ac; outline: none; }
+        .ic-buttons { display: flex; gap: 8px; margin-top: 12px; }
+        .ic-btn {
+            flex: 1; padding: 8px; border: none; border-radius: 4px;
+            cursor: pointer; font-size: 12px; font-weight: 600;
+        }
+        .ic-btn.run { background: #2a7; color: #fff; }
+        .ic-btn.run:hover { background: #3b8; }
+        .ic-btn.randomize { background: #558; color: #ccc; }
+        .ic-btn.randomize:hover { background: #669; }
+
+        /* Bottom playback bar */
+        #playbackBar {
+            position: fixed; bottom: 0; left: 0; right: 0; height: 38px;
+            display: flex; align-items: center; padding: 0 12px;
+            background: rgba(15,15,20,0.9); border-top: 1px solid #2a2a2a;
+            z-index: 100; gap: 8px;
+        }
+        .pb-btn { background: none; border: none; color: #aaa; font-size: 16px; cursor: pointer; padding: 2px 6px; }
+        .pb-btn:hover { color: #fff; }
+        #timeSlider {
+            flex: 1; -webkit-appearance: none; height: 3px;
+            background: #444; border-radius: 2px; outline: none;
+        }
+        #timeSlider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 10px; height: 10px;
+            background: #6ac; border-radius: 50%; cursor: pointer;
+        }
+        #timeDisplay { font-size: 11px; color: #888; min-width: 70px; text-align: right; }
+        .speed-control { display: flex; align-items: center; gap: 4px; }
+        .speed-control label { font-size: 11px; color: #777; }
+        .speed-control input[type="range"] {
+            width: 60px; -webkit-appearance: none; height: 2px; background: #444; outline: none;
+        }
+        .speed-control input::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 8px; height: 8px;
+            background: #999; border-radius: 50%; cursor: pointer;
+        }
+        .speed-control span { font-size: 11px; color: #888; min-width: 22px; }
+
+        /* Body labels */
+        .body-label {
+            position: absolute; font-size: 11px; white-space: nowrap;
+            pointer-events: none; padding: 1px 5px;
+            border: 1px solid rgba(255,255,255,0.25);
+            background: rgba(0,0,0,0.55); border-radius: 2px;
+        }
+        #loading {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px; color: #888; z-index: 200;
+        }
+        #viewHint {
+            position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.55); color: #777; font-size: 12px;
+            padding: 5px 16px; border-radius: 12px; pointer-events: none;
+            transition: opacity 1.5s; z-index: 200; white-space: nowrap;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <canvas id="simCanvas"></canvas>
+    <div id="labelsContainer"></div>
+    <div id="loading">Loading simulation...</div>
+    <div id="viewHint">Drag to rotate &nbsp;·&nbsp; Scroll to zoom &nbsp;·&nbsp; Right-click to pan</div>
+
+    <div id="topBar">
+        <button class="nav-btn active" data-panel="graphics">
+            <span class="icon">&#x270F;</span>Graphics
+        </button>
+        <button class="nav-btn" data-panel="physics">
+            <span class="icon">&#x1F310;</span>Physics
+        </button>
+        <button class="nav-btn" data-panel="masses">
+            <span class="icon">&#x2696;</span>Masses
+        </button>
+    </div>
+
+    <div id="sidePanel" class="open">
+        <div class="panel-header">
+            <h2 id="panelTitle">Graphics</h2>
+            <button class="close-btn" id="closePanelBtn">&#x2716;</button>
+        </div>
+        <div class="panel-tabs" id="panelTabs">
+            <button class="panel-tab active" data-tab="camera">Camera</button>
+            <button class="panel-tab" data-tab="objects">Objects</button>
+            <button class="panel-tab" data-tab="initial" id="icTabBtn" style="display:none">Initial Cond.</button>
+        </div>
+
+        <!-- Camera tab -->
+        <div id="cameraTab" class="tab-content active">
+            <div class="setting-group">
+                <div class="setting-label"><span>Camera Focus</span><button class="help-btn">[?]</button></div>
+                <select class="setting-select" id="cameraFocus">
+                    <option value="barycenter">Barycenter</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label class="checkbox-row">
+                    <input type="checkbox" id="showLabelsCheck" checked>
+                    Show Body Names
+                </label>
+                <label class="checkbox-row">
+                    <input type="checkbox" id="showTrailsCheck" checked>
+                    Show Orbital Trails
+                </label>
+                <label class="checkbox-row">
+                    <input type="checkbox" id="showCOMCheck" checked>
+                    Show Center of Mass
+                </label>
+            </div>
+        </div>
+
+        <!-- Objects tab -->
+        <div id="objectsTab" class="tab-content">
+            <div id="objectsList"></div>
+        </div>
+
+        <!-- Initial conditions tab (three-body only) -->
+        <div id="initialTab" class="tab-content">
+            <div id="icEditor"></div>
+            <div class="ic-buttons">
+                <button class="ic-btn randomize" id="randomizeBtn">Randomize</button>
+                <button class="ic-btn run" id="runBtn">Run Simulation</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="playbackBar">
+        <button class="pb-btn" id="playPauseBtn">&#9654;</button>
+        <button class="pb-btn" id="resetBtn">&#x21BA;</button>
+        <input type="range" id="timeSlider" min="0" max="100" value="0">
+        <span id="timeDisplay">t = 0.00</span>
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" id="speedSlider" min="1" max="30" value="5">
+            <span id="speedValue">5x</span>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const labelsContainer = document.getElementById('labelsContainer');
+        const loadingEl = document.getElementById('loading');
+
+        const BODY_COLORS = ['#4dabf7', '#ff6b6b', '#51cf66'];
+        const COM_COLOR = '#ffd43b';
+
+        // Simulation state
+        let history = [];
+        let currentStep = 0;
+        let isPlaying = false;
+        let playSpeed = 5;
+        let showTrails = true;
+        let showLabels = true;
+        let showCOM = true;
+        let labelElements = {};
+        let visibleBodies = new Set();
+        let scenario = '';
+        let worldScale = 1;
+
+        const SUN_MARKER = { x: 1.1e8, y: 8.5e7, name: 'Sun' };
+
+        let icState = {
+            masses: [3.0, 4.0, 5.0],
+            positions: [[1.0, 3.0], [-2.0, -1.0], [1.0, -1.0]],
+            velocities: [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
+        };
+
+        // ---- Three.js Setup ----
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setClearColor(0x000000, 1);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 5000);
+        camera.position.set(0, 0, 20);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.screenSpacePanning = false;
+        controls.minDistance = 0.2;
+        controls.maxDistance = 300;
+        controls.target.set(0, 0, 0);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 8);
+        scene.add(dirLight);
+
+        // Scene object handles
+        let bodyMeshes = [], trailLines = [], comGroup = null, sceneSunMesh = null, starPoints = null;
+
+        // ---- Resize ----
+        function resizeCanvas() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            buildStarfield();
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // ---- Starfield ----
+        function buildStarfield() {
+            if (starPoints) { scene.remove(starPoints); starPoints.geometry.dispose(); starPoints.material.dispose(); }
+            const n = 2000;
+            const pos = new Float32Array(n * 3);
+            for (let i = 0; i < n; i++) {
+                const phi = Math.acos(2 * Math.random() - 1);
+                const theta = Math.random() * Math.PI * 2;
+                const r = 300 + Math.random() * 150;
+                pos[i*3]   = r * Math.sin(phi) * Math.cos(theta);
+                pos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+                pos[i*3+2] = r * Math.cos(phi);
+            }
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            starPoints = new THREE.Points(geo, new THREE.PointsMaterial({
+                color: 0xffffff, size: 0.8, sizeAttenuation: true, transparent: true, opacity: 0.6
+            }));
+            scene.add(starPoints);
+        }
+
+        // ---- World scale ----
+        function computeWorldScale() {
+            let maxR = 0;
+            for (const frame of history) {
+                for (const b of frame.bodies) {
+                    maxR = Math.max(maxR, Math.abs(b.position[0]), Math.abs(b.position[1]));
+                }
+            }
+            if (scenario === 'pluto_system') {
+                maxR = Math.max(maxR, Math.abs(SUN_MARKER.x), Math.abs(SUN_MARKER.y));
+            }
+            worldScale = 12 / (maxR || 1);
+        }
+
+        // ---- Build / dispose Three.js scene objects ----
+        function disposeSceneObjects() {
+            [...bodyMeshes, ...trailLines].forEach(o => {
+                scene.remove(o); o.geometry.dispose(); o.material.dispose();
+            });
+            bodyMeshes = []; trailLines = [];
+            if (comGroup) { comGroup.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); }); scene.remove(comGroup); comGroup = null; }
+            if (sceneSunMesh) { scene.remove(sceneSunMesh); sceneSunMesh.geometry.dispose(); sceneSunMesh.material.dispose(); sceneSunMesh = null; }
+        }
+
+        function buildSceneObjects() {
+            disposeSceneObjects();
+            if (!history.length) return;
+            const s0 = history[0];
+
+            s0.bodies.forEach((body, i) => {
+                const col = scenario === 'three_body'
+                    ? parseInt(BODY_COLORS[i % BODY_COLORS.length].slice(1), 16)
+                    : 0xffffff;
+                const r = scenario === 'three_body' ? 0.08 + Math.sqrt(body.mass) * 0.07 : 0.28;
+                const mesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(r, 20, 20),
+                    new THREE.MeshPhongMaterial({ color: col, emissive: col, emissiveIntensity: 0.35 })
+                );
+                scene.add(mesh);
+                bodyMeshes.push(mesh);
+
+                // Pre-compute full trail geometry (O(1) draw-range updates per frame)
+                const pts = new Float32Array(history.length * 3);
+                for (let s = 0; s < history.length; s++) {
+                    const p = history[s].bodies[i].position;
+                    pts[s*3]   = p[0] * worldScale;
+                    pts[s*3+1] = p[1] * worldScale;
+                    pts[s*3+2] = 0;
+                }
+                const tGeo = new THREE.BufferGeometry();
+                tGeo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
+                tGeo.setDrawRange(0, 0);
+                const tCol = scenario === 'three_body'
+                    ? parseInt(BODY_COLORS[i % BODY_COLORS.length].slice(1), 16)
+                    : 0xaab0c8;
+                const line = new THREE.Line(tGeo, new THREE.LineBasicMaterial({ color: tCol, transparent: true, opacity: 0.55 }));
+                scene.add(line);
+                trailLines.push(line);
+            });
+
+            // COM (sphere + crosshair lines)
+            comGroup = new THREE.Group();
+            comGroup.add(new THREE.Mesh(
+                new THREE.SphereGeometry(0.1, 8, 8),
+                new THREE.MeshBasicMaterial({ color: parseInt(COM_COLOR.slice(1), 16) })
+            ));
+            const cg = new THREE.BufferGeometry();
+            cg.setAttribute('position', new THREE.BufferAttribute(
+                new Float32Array([-0.45,0,0, 0.45,0,0, 0,-0.45,0, 0,0.45,0]), 3
+            ));
+            comGroup.add(new THREE.LineSegments(cg, new THREE.LineBasicMaterial({
+                color: parseInt(COM_COLOR.slice(1), 16), transparent: true, opacity: 0.5
+            })));
+            scene.add(comGroup);
+
+            // Sun sphere (pluto only)
+            if (scenario === 'pluto_system') {
+                sceneSunMesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.35, 12, 12),
+                    new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true })
+                );
+                sceneSunMesh.position.set(SUN_MARKER.x * worldScale, SUN_MARKER.y * worldScale, 0);
+                scene.add(sceneSunMesh);
+            }
+
+            // Reset camera to top-down view
+            camera.position.set(0, 0, 20);
+            camera.up.set(0, 1, 0);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        }
+
+        // ---- Data fetching ----
+        function fetchSimulation(customParams) {
+            scenario = new URLSearchParams(window.location.search).get('scenario') || 'pluto_system';
+            loadingEl.style.display = '';
+            let url = `http://localhost:8000/simulate/${scenario}`;
+            if (customParams) url += '?' + customParams;
+            fetch(url)
+                .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+                .then(data => {
+                    loadingEl.style.display = 'none';
+                    if (data.error) { loadingEl.style.display = ''; loadingEl.textContent = 'Error: ' + data.error; return; }
+                    history = data.history;
+                    currentStep = 0;
+                    clearLabels();
+                    initVisibility();
+                    computeWorldScale();
+                    buildSceneObjects();
+                    populateDropdowns();
+                    populateObjectsList();
+                    setupScenarioUI();
+                    document.getElementById('timeSlider').max = history.length - 1;
+                })
+                .catch(err => { loadingEl.textContent = 'Error loading simulation'; console.error(err); });
+        }
+
+        function clearLabels() { labelsContainer.innerHTML = ''; labelElements = {}; }
+
+        function initVisibility() {
+            if (!history.length) return;
+            visibleBodies = new Set(history[0].bodies.map(b => b.name));
+        }
+
+        function setupScenarioUI() {
+            const isThreeBody = scenario === 'three_body';
+            document.getElementById('icTabBtn').style.display = isThreeBody ? '' : 'none';
+            if (isThreeBody) {
+                const s0 = history[0];
+                icState.masses = s0.bodies.map(b => b.mass);
+                icState.positions = s0.bodies.map(b => [b.position[0], b.position[1]]);
+                icState.velocities = s0.bodies.map(b => [b.velocity[0], b.velocity[1]]);
+                buildICEditor();
+            }
+        }
+
+        function buildICEditor() {
+            const editor = document.getElementById('icEditor');
+            editor.innerHTML = '';
+            for (let i = 0; i < 3; i++) {
+                const color = BODY_COLORS[i];
+                const div = document.createElement('div');
+                div.className = 'ic-body';
+                div.style.borderLeftColor = color;
+                div.innerHTML = `
+                    <h4 style="color:${color}">Body ${i+1}</h4>
+                    <div class="ic-row"><label>Mass</label><input type="number" step="0.1" data-i="${i}" data-field="mass" value="${icState.masses[i].toFixed(2)}"></div>
+                    <div class="ic-row"><label>X</label><input type="number" step="0.1" data-i="${i}" data-field="px" value="${icState.positions[i][0].toFixed(3)}">
+                                        <label>Y</label><input type="number" step="0.1" data-i="${i}" data-field="py" value="${icState.positions[i][1].toFixed(3)}"></div>
+                    <div class="ic-row"><label>Vx</label><input type="number" step="0.1" data-i="${i}" data-field="vx" value="${icState.velocities[i][0].toFixed(3)}">
+                                        <label>Vy</label><input type="number" step="0.1" data-i="${i}" data-field="vy" value="${icState.velocities[i][1].toFixed(3)}"></div>
+                `;
+                editor.appendChild(div);
+            }
+            editor.querySelectorAll('input').forEach(inp => {
+                inp.addEventListener('change', () => {
+                    const i = parseInt(inp.dataset.i);
+                    const v = parseFloat(inp.value);
+                    switch(inp.dataset.field) {
+                        case 'mass': icState.masses[i] = v; break;
+                        case 'px': icState.positions[i][0] = v; break;
+                        case 'py': icState.positions[i][1] = v; break;
+                        case 'vx': icState.velocities[i][0] = v; break;
+                        case 'vy': icState.velocities[i][1] = v; break;
+                    }
+                });
+            });
+        }
+
+        function runWithIC() {
+            const pos = icState.positions.flat().join(',');
+            const vel = icState.velocities.flat().join(',');
+            const mass = icState.masses.join(',');
+            fetchSimulation(`pos=${pos}&vel=${vel}&mass=${mass}&steps=3000`);
+        }
+
+        function randomizeIC() {
+            for (let i = 0; i < 3; i++) {
+                icState.masses[i] = +(1 + Math.random() * 5).toFixed(2);
+                icState.positions[i] = [+((Math.random()-0.5)*4).toFixed(3), +((Math.random()-0.5)*4).toFixed(3)];
+                icState.velocities[i] = [0, 0];
+            }
+            buildICEditor();
+            runWithIC();
+        }
+
+        document.getElementById('runBtn').addEventListener('click', runWithIC);
+        document.getElementById('randomizeBtn').addEventListener('click', randomizeIC);
+
+        function populateDropdowns() {
+            if (!history.length) return;
+            const names = history[0].bodies.map(b => b.name);
+            const sel = document.getElementById('cameraFocus');
+            const cur = sel.value;
+            sel.innerHTML = '<option value="barycenter">Barycenter</option>';
+            names.forEach(n => {
+                const opt = document.createElement('option'); opt.value = n; opt.textContent = n; sel.appendChild(opt);
+            });
+            if (scenario === 'pluto_system') {
+                const sunOpt = document.createElement('option'); sunOpt.value = 'Sun'; sunOpt.textContent = 'Sun'; sel.appendChild(sunOpt);
+            }
+            sel.value = cur || 'barycenter';
+        }
+
+        function populateObjectsList() {
+            const list = document.getElementById('objectsList');
+            list.innerHTML = '';
+            if (!history.length) return;
+            const allNames = [...history[0].bodies.map(b => b.name)];
+            if (scenario === 'pluto_system') allNames.push('Sun');
+            allNames.forEach(name => {
+                const label = document.createElement('label');
+                label.className = 'checkbox-row';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = visibleBodies.has(name);
+                cb.addEventListener('change', () => {
+                    if (cb.checked) visibleBodies.add(name); else visibleBodies.delete(name);
+                    clearLabels();
+                });
+                label.appendChild(cb);
+                const span = document.createElement('span');
+                const bodyIdx = history[0].bodies.findIndex(b => b.name === name);
+                if (bodyIdx >= 0 && scenario === 'three_body') span.style.color = BODY_COLORS[bodyIdx % BODY_COLORS.length];
+                span.textContent = name;
+                label.appendChild(span);
+                list.appendChild(label);
+            });
+        }
+
+        // ---- Physics helpers ----
+        function getBarycenter(state) {
+            let tm = 0, cx = 0, cy = 0;
+            for (const b of state.bodies) { tm += b.mass; cx += b.position[0]*b.mass; cy += b.position[1]*b.mass; }
+            return [cx/tm, cy/tm];
+        }
+
+        function getFocusPosition(state) {
+            const focus = document.getElementById('cameraFocus').value;
+            if (focus === 'barycenter') return getBarycenter(state);
+            if (focus === 'Sun') return [SUN_MARKER.x, SUN_MARKER.y];
+            const body = state.bodies.find(b => b.name === focus);
+            return body ? [...body.position] : getBarycenter(state);
+        }
+
+        // ---- Rendering (called every animation frame) ----
+        function draw() {
+            if (!history.length) return;
+            const state = history[currentStep];
+
+            state.bodies.forEach((body, i) => {
+                const vis = visibleBodies.has(body.name);
+                if (i < bodyMeshes.length) {
+                    bodyMeshes[i].visible = vis;
+                    bodyMeshes[i].position.set(
+                        body.position[0] * worldScale,
+                        body.position[1] * worldScale,
+                        0
+                    );
+                }
+                if (i < trailLines.length) {
+                    trailLines[i].visible = vis && showTrails;
+                    if (vis && showTrails) trailLines[i].geometry.setDrawRange(0, currentStep + 1);
+                }
+            });
+
+            // COM marker
+            if (comGroup) {
+                const com = getBarycenter(state);
+                comGroup.position.set(com[0] * worldScale, com[1] * worldScale, 0);
+                comGroup.visible = showCOM;
+            }
+
+            // Sun
+            if (sceneSunMesh) sceneSunMesh.visible = visibleBodies.has('Sun');
+
+            // Labels: hide all, then re-project visible ones each frame (required for 3D rotation)
+            Object.values(labelElements).forEach(el => el.style.display = 'none');
+            if (showLabels) {
+                state.bodies.forEach((body, i) => {
+                    if (!visibleBodies.has(body.name) || i >= bodyMeshes.length) return;
+                    const sp = projectToScreen(bodyMeshes[i].position);
+                    if (!sp) return;
+                    const col = scenario === 'three_body' ? BODY_COLORS[i % BODY_COLORS.length] : '#fff';
+                    const pxR = scenario === 'three_body' ? (10 + Math.sqrt(body.mass) * 5) : 12;
+                    setLabel(i, body.name, sp.x + pxR, sp.y - 4, col);
+                });
+                if (sceneSunMesh && visibleBodies.has('Sun')) {
+                    const sp = projectToScreen(sceneSunMesh.position);
+                    if (sp) setLabel('sun', 'Sun', sp.x + 12, sp.y - 4, '#fff');
+                }
+            }
+
+            document.getElementById('timeDisplay').textContent = scenario === 'pluto_system'
+                ? (state.time / 86400).toFixed(1) + ' days'
+                : 't = ' + state.time.toFixed(2);
+            document.getElementById('timeSlider').value = currentStep;
+        }
+
+        function projectToScreen(pos3D) {
+            const v = pos3D.clone().project(camera);
+            if (v.z > 1) return null;
+            return {
+                x: Math.round((v.x + 1) / 2 * window.innerWidth),
+                y: Math.round((-v.y + 1) / 2 * window.innerHeight)
+            };
+        }
+
+        function setLabel(key, text, x, y, color) {
+            if (!labelElements[key]) {
+                const el = document.createElement('div');
+                el.className = 'body-label';
+                el.textContent = text;
+                labelsContainer.appendChild(el);
+                labelElements[key] = el;
+            }
+            const el = labelElements[key];
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+            el.style.color = color || '#ddd';
+            el.style.display = '';
+        }
+
+        // ---- Animation loop ----
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            if (isPlaying && history.length > 0 && currentStep < history.length - 1) {
+                currentStep = Math.min(currentStep + playSpeed, history.length - 1);
+                if (currentStep >= history.length - 1) {
+                    isPlaying = false;
+                    document.getElementById('playPauseBtn').innerHTML = '&#9654;';
+                }
+            }
+            draw();
+            renderer.render(scene, camera);
+        }
+
+        // ---- Event handlers ----
+        document.getElementById('playPauseBtn').addEventListener('click', () => {
+            if (currentStep >= history.length - 1) currentStep = 0;
+            isPlaying = !isPlaying;
+            document.getElementById('playPauseBtn').innerHTML = isPlaying ? '&#9646;&#9646;' : '&#9654;';
+        });
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            currentStep = 0; isPlaying = false;
+            document.getElementById('playPauseBtn').innerHTML = '&#9654;';
+        });
+        document.getElementById('timeSlider').addEventListener('input', e => { currentStep = parseInt(e.target.value); });
+        document.getElementById('speedSlider').addEventListener('input', e => {
+            playSpeed = parseInt(e.target.value);
+            document.getElementById('speedValue').textContent = playSpeed + 'x';
+        });
+        document.getElementById('cameraFocus').addEventListener('change', () => {
+            if (!history.length) return;
+            const fp = getFocusPosition(history[currentStep]);
+            controls.target.set(fp[0] * worldScale, fp[1] * worldScale, 0);
+            controls.update();
+        });
+        document.getElementById('showLabelsCheck').addEventListener('change', e => { showLabels = e.target.checked; });
+        document.getElementById('showTrailsCheck').addEventListener('change', e => { showTrails = e.target.checked; });
+        document.getElementById('showCOMCheck').addEventListener('change', e => { showCOM = e.target.checked; });
+
+        // Panel / tab handling
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById('panelTitle').textContent = btn.textContent.trim();
+                document.getElementById('sidePanel').classList.add('open');
+            });
+        });
+        document.getElementById('closePanelBtn').addEventListener('click', () => {
+            document.getElementById('sidePanel').classList.remove('open');
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        });
+        document.querySelectorAll('.panel-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab + 'Tab').classList.add('active');
+            });
+        });
+
+        // Fade out the 3D hint after 5 seconds
+        setTimeout(() => {
+            const hint = document.getElementById('viewHint');
+            if (hint) { hint.style.opacity = '0'; setTimeout(() => hint.remove(), 1500); }
+        }, 5000);
+
+        // Init
+        resizeCanvas();
+        fetchSimulation();
+        animate();
+    </script>
+</body>
+</html>

@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gravitational Systems Simulator</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap');
+
+:root {
+  --void: #02050a;
+  --deep: #060d18;
+  --surface: #0c1626;
+  --panel: #0f1e33;
+  --border: #1a3050;
+  --border-bright: #2a5080;
+  --text: #c8ddf0;
+  --text-dim: #5a7a9a;
+  --text-muted: #304060;
+  --accent: #00c8ff;
+  --accent-dim: #0077aa;
+  --accent-glow: rgba(0,200,255,0.15);
+  --gold: #ffb340;
+  --success: #00e87a;
+  --danger: #ff4060;
+  --mono: 'Space Mono', monospace;
+  --display: 'Syne', sans-serif;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%; height: 100%;
+  background: var(--void);
+  color: var(--text);
+  font-family: var(--display);
+  overflow-x: hidden;
+}
+
+/* === CANVAS BACKGROUND === */
+#bg-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.4;
+}
+
+/* === AUTH OVERLAY === */
+#auth-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2,5,10,0.92);
+  backdrop-filter: blur(8px);
+  opacity: 1;
+  transition: opacity 0.5s ease;
+}
+
+#auth-overlay.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.auth-card {
+  background: var(--panel);
+  border: 1px solid var(--border-bright);
+  border-radius: 4px;
+  padding: 48px 40px;
+  width: min(420px, 90vw);
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+}
+
+.auth-card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 60%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+  animation: scan 3s ease-in-out 0.5s forwards;
+}
+
+@keyframes scan {
+  to { left: 150%; }
+}
+
+.auth-logo {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  margin-bottom: 32px;
+  opacity: 0.8;
+}
+
+.auth-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+}
+
+.auth-sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 32px;
+  letter-spacing: 0.05em;
+}
+
+.field-group {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.field-group label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.field-group input {
+  width: 100%;
+  background: var(--deep);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 12px 16px;
+  font-family: var(--mono);
+  font-size: 14px;
+  border-radius: 3px;
+  outline: none;
+  transition: border-color 0.2s;
+  letter-spacing: 0.1em;
+}
+
+.field-group input:focus {
+  border-color: var(--accent-dim);
+  box-shadow: 0 0 0 1px var(--accent-dim), inset 0 0 12px var(--accent-glow);
+}
+
+.auth-btn {
+  width: 100%;
+  padding: 14px;
+  background: transparent;
+  border: 1px solid var(--accent-dim);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: 3px;
+  margin-top: 8px;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--accent-glow);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.auth-btn:hover { border-color: var(--accent); color: #fff; }
+.auth-btn:hover::before { opacity: 1; }
+.auth-btn:active { transform: scale(0.99); }
+
+.auth-error {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--danger);
+  margin-top: 12px;
+  text-align: center;
+  min-height: 16px;
+  letter-spacing: 0.05em;
+}
+
+/* === MAIN APP === */
+#app {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  transition: opacity 0.6s ease 0.2s;
+}
+
+#app.visible { opacity: 1; }
+
+/* === HEADER === */
+header {
+  padding: 24px 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  background: rgba(6,13,24,0.6);
+  backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+@keyframes rotate-slow {
+  to { transform: rotate(360deg); }
+}
+
+.logo-text {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.logo-text span {
+  color: var(--accent);
+}
+
+.header-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.15em;
+  text-align: right;
+  line-height: 1.8;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+  animation: pulse-dot 2s ease infinite;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* === HERO === */
+.hero {
+  padding: 80px 48px 48px;
+  max-width: 900px;
+}
+
+.hero-eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+.hero-title {
+  font-size: clamp(40px, 6vw, 72px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.0;
+  margin-bottom: 20px;
+}
+
+.hero-title .dim { color: var(--text-muted); }
+
+.hero-desc {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-dim);
+  max-width: 480px;
+  line-height: 1.8;
+  letter-spacing: 0.02em;
+}
+
+/* === SIMULATION GRID === */
+.section {
+  padding: 48px;
+  flex: 1;
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.section-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.section-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.section-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.sim-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 2px;
+}
+
+/* === SIMULATION CARD === */
+.sim-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 32px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.25s, transform 0.25s;
+  text-decoration: none;
+  display: block;
+}
+
+.sim-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--accent-glow) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.sim-card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.sim-card:hover {
+  border-color: var(--border-bright);
+  transform: translateY(-2px);
+}
+
+.sim-card:hover::before { opacity: 1; }
+.sim-card:hover::after { transform: scaleX(1); }
+
+.sim-card:active { transform: translateY(0) scale(0.995); }
+
+.card-icon {
+  font-size: 32px;
+  margin-bottom: 20px;
+  display: block;
+}
+
+.card-id {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.card-name {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-bottom: 10px;
+  line-height: 1.1;
+}
+
+.card-desc {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.7;
+  margin-bottom: 24px;
+}
+
+.card-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 2px;
+}
+
+.card-arrow {
+  position: absolute;
+  bottom: 32px;
+  right: 32px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 14px;
+  transition: all 0.25s;
+}
+
+.sim-card:hover .card-arrow {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+/* Loading state on card click */
+.sim-card.loading .card-arrow {
+  animation: spin 0.8s linear infinite;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* === FOOTER === */
+footer {
+  padding: 24px 48px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-text {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+}
+
+.logout-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logout-btn:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 600px) {
+  header { padding: 16px 24px; }
+  .hero { padding: 48px 24px 32px; }
+  .section { padding: 32px 24px; }
+  footer { padding: 16px 24px; flex-direction: column; gap: 12px; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<!-- AUTH OVERLAY -->
+<div id="auth-overlay">
+  <div class="auth-card">
+    <div class="auth-logo">// Gravitational Systems Simulator Terminal</div>
+    <div class="auth-title">Authenticate</div>
+    <div class="auth-sub">SECURE SESSION REQUIRED — ENTER CREDENTIALS</div>
+    <div class="field-group">
+      <label>Access Password</label>
+      <input type="password" id="pw-input" placeholder="" autocomplete="off">
+    </div>
+    <button class="auth-btn" id="auth-btn" onclick="authenticate()">Initialize Session →</button>
+    <div class="auth-error" id="auth-error"></div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <header>
+    <div class="header-logo">
+      <div class="logo-text">Grav<span>Sim</span></div>
+    </div>
+    <div class="header-meta">
+      <div><span class="status-dot"></span>SESSION ACTIVE</div>
+      <div id="session-info">AUTHENTICATED</div>
+    </div>
+  </header>
+
+  <div class="hero">
+    <div class="hero-eyebrow">// Gravitational Systems Simulator</div>
+    <div class="hero-title">
+      Select<br>
+      <span class="dim">Simulation</span>
+    </div>
+    <div class="hero-desc">
+      GPU-accelerated scientific simulations running on dedicated compute infrastructure.
+      Select a module below to initialize.
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Available Modules</div>
+      <div class="section-line"></div>
+      <div class="section-count" id="sim-count">—</div>
+    </div>
+    <div class="sim-grid" id="sim-grid">
+      <!-- Populated dynamically -->
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-text">Gravitational Systems Simulator</div>
+    <button class="logout-btn" onclick="logout()">End Session</button>
+  </footer>
+</div>
+
+<script>
+// ============================================================================
+// BACKGROUND PARTICLE CANVAS
+// ============================================================================
+(function () {
+  const canvas = document.getElementById('bg-canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, particles = [];
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+
+  function initParticles(n = 120) {
+    particles = [];
+    for (let i = 0; i < n; i++) {
+      particles.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.2,
+        vy: (Math.random() - 0.5) * 0.2,
+        r: Math.random() * 1.5 + 0.3,
+        a: Math.random() * 0.5 + 0.1,
+      });
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    // Draw connections
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < 140) {
+          ctx.beginPath();
+          ctx.strokeStyle = `rgba(0,150,220,${(1 - d / 140) * 0.12})`;
+          ctx.lineWidth = 0.5;
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.stroke();
+        }
+      }
+    }
+    // Draw particles
+    for (const p of particles) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(0,200,255,${p.a})`;
+      ctx.fill();
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0) p.x = W;
+      if (p.x > W) p.x = 0;
+      if (p.y < 0) p.y = H;
+      if (p.y > H) p.y = 0;
+    }
+    requestAnimationFrame(draw);
+  }
+
+  resize();
+  initParticles();
+  draw();
+  window.addEventListener('resize', () => { resize(); initParticles(); });
+})();
+
+// ============================================================================
+// AUTH & SESSION
+// ============================================================================
+let sessionToken = null;
+const STORE_TOKEN = true;
+
+async function authenticate() {
+  const pw = document.getElementById('pw-input').value.trim();
+  const errEl = document.getElementById('auth-error');
+  const btn = document.getElementById('auth-btn');
+
+  if (!pw) { errEl.textContent = 'Password required'; return; }
+
+  btn.textContent = 'Authenticating...';
+  btn.disabled = true;
+  errEl.textContent = '';
+
+  try {
+    const res = await fetch('/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw }),
+    });
+
+    if (!res.ok) {
+      errEl.textContent = 'Access denied — invalid credentials';
+      btn.textContent = 'Initialize Session →';
+      btn.disabled = false;
+      return;
+    }
+
+    const data = await res.json();
+    sessionToken = data.token;
+
+    if (STORE_TOKEN) {
+      localStorage.setItem('simlab_token', sessionToken);
+      localStorage.setItem('simlab_expiry', Date.now() + data.expires_in * 1000);
+    }
+
+    // Populate simulations and show app
+    populateSimGrid(data.simulations || []);
+    showApp();
+  } catch (err) {
+    errEl.textContent = 'Connection error — check server';
+    btn.textContent = 'Initialize Session →';
+    btn.disabled = false;
+  }
+}
+
+function tryAutoLogin() {
+  if (!STORE_TOKEN) return false;
+  const token = localStorage.getItem('simlab_token');
+  const expiry = localStorage.getItem('simlab_expiry');
+  if (token && expiry && Date.now() < parseInt(expiry)) {
+    sessionToken = token;
+    return true;
+  }
+  localStorage.removeItem('simlab_token');
+  localStorage.removeItem('simlab_expiry');
+  return false;
+}
+
+async function autoLoginAndLoad() {
+  try {
+    const res = await fetch(`/simulations?token=${encodeURIComponent(sessionToken)}`);
+    if (!res.ok) {
+      localStorage.removeItem('simlab_token');
+      localStorage.removeItem('simlab_expiry');
+      sessionToken = null;
+      return;
+    }
+    const data = await res.json();
+    populateSimGrid(data.simulations || []);
+    showApp();
+  } catch (err) {
+    sessionToken = null;
+  }
+}
+
+function showApp() {
+  document.getElementById('auth-overlay').classList.add('fade-out');
+  setTimeout(() => document.getElementById('auth-overlay').style.display = 'none', 600);
+  document.getElementById('app').classList.add('visible');
+}
+
+function logout() {
+  localStorage.removeItem('simlab_token');
+  localStorage.removeItem('simlab_expiry');
+  sessionToken = null;
+  document.getElementById('auth-overlay').style.display = 'flex';
+  document.getElementById('auth-overlay').classList.remove('fade-out');
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('pw-input').value = '';
+  document.getElementById('auth-error').textContent = '';
+  document.getElementById('auth-btn').textContent = 'Initialize Session →';
+  document.getElementById('auth-btn').disabled = false;
+}
+
+// ============================================================================
+// SIMULATION GRID
+// ============================================================================
+function populateSimGrid(simulations) {
+  const grid = document.getElementById('sim-grid');
+  const count = document.getElementById('sim-count');
+  grid.innerHTML = '';
+  count.textContent = `${simulations.length} MODULE${simulations.length !== 1 ? 'S' : ''}`;
+
+  if (simulations.length === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1;padding:48px;text-align:center;font-family:var(--mono);font-size:12px;color:var(--text-muted)">NO SIMULATIONS AVAILABLE</div>`;
+    return;
+  }
+
+  for (const sim of simulations) {
+    const card = document.createElement('div');
+    card.className = 'sim-card';
+    card.dataset.simId = sim.id;
+    card.innerHTML = `
+      <span class="card-icon">${sim.icon || '◻'}</span>
+      <div class="card-id">SIM // ${sim.id.toUpperCase()}</div>
+      <div class="card-name">${sim.name}</div>
+      <div class="card-desc">${sim.description}</div>
+      <div class="card-tags">
+        ${(sim.tags || []).map(t => `<span class="tag">${t}</span>`).join('')}
+      </div>
+      <div class="card-arrow">→</div>
+    `;
+    card.addEventListener('click', () => launchSim(sim.id, card));
+    grid.appendChild(card);
+  }
+}
+
+function launchSim(simId, cardEl) {
+  if (!sessionToken) return;
+  cardEl.classList.add('loading');
+  // Navigate to simulation page with token passed in sessionStorage
+  sessionStorage.setItem('simlab_launch_token', sessionToken);
+  sessionStorage.setItem('simlab_launch_sim', simId);
+  window.location.href = `/sim/${simId}?token=${encodeURIComponent(sessionToken)}`;
+}
+
+// ============================================================================
+// INIT
+// ============================================================================
+document.getElementById('pw-input').addEventListener('keypress', e => {
+  if (e.key === 'Enter') authenticate();
+});
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (tryAutoLogin()) {
+    autoLoginAndLoad();
+  }
+});
+</script>
+</body>
+</html>
