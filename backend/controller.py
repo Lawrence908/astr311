@@ -49,7 +49,7 @@ SIMULATION_REGISTRY: Dict[str, Dict[str, Any]] = {
         "name": "Real Time Gravitational Curvature Simulator",
         "description": "GPU-accelerated N-body orbital mechanics simulation",
         "module": "simulations.jasper.app",
-        "icon": "⚛",
+        "icon": "⏰",
         "tags": ["physics", "GPU", "N-body"],
     },
     "ethansim": {
@@ -62,12 +62,13 @@ SIMULATION_REGISTRY: Dict[str, Dict[str, Any]] = {
     "tags":        ["physics", "CPU", "N-body", "3D"],
     },
     "chrissim": {
-        "id": "chrissim",
-        "name": "Big Bang Gravity Simulator",
-        "description": "N-body explosion from a point — particles expand outward while gravity pulls them back",
-        "module": "simulations.chris.app",
-        "icon": "💥",
-        "tags": ["physics", "CPU", "N-body", "explosion"],
+        "id":          "chrissim",
+        "name":        "Big Bang Simulator",
+        "description": "N-body explosion: gravitational collapse of expanding particles",
+        "module":      "simulations.chris.app",
+        "html_file":   "chrissim.html",
+        "icon":        "💥",
+        "tags":        ["physics", "CPU", "N-body", "explosion"],
     },
 }
 
@@ -94,7 +95,7 @@ serialization_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="s
 ACTIVE_SESSIONS: Dict[str, Dict[str, Any]] = {}
 ACTIVE_RUNNERS: Dict[str, Any] = {}
 SESSION_LOCK = threading.Lock()
-
+SESSION_DURATION = 1800
 
 class AuthRequest(BaseModel):
     password: str
@@ -111,11 +112,12 @@ async def authenticate(auth: AuthRequest):
             "valid": True,
             "sim_id": None,
             "created_at": time.time(),
+            "expires_at": time.time() + SESSION_DURATION,
         }
 
     return {
         "token": token,
-        "expires_in": 86400,
+        "expires_in": SESSION_DURATION,
         "message": "Authentication successful",
         "simulations": list(SIMULATION_REGISTRY.values()),
     }
