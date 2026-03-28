@@ -217,7 +217,7 @@
     <canvas id="simCanvas"></canvas>
     <div id="labelsContainer"></div>
     <div id="loading">Connecting to server...</div>
-    <div id="viewHint">Drag to rotate &nbsp;·&nbsp; Scroll to zoom &nbsp;·&nbsp; Right-click to pan</div>
+    <div id="viewHint">Drag to rotate &nbsp;·&nbsp; Scroll to zoom &nbsp;·&nbsp; Middle-drag to pan &nbsp;·&nbsp; Right-click: add body (N-body)</div>
 
     <!-- Disconnect overlay -->
     <div id="disconnect-overlay">
@@ -525,6 +525,7 @@
     let showCOM      = true;
     let showRefGrid  = false;
     let refGrid      = null;
+    const pickPlane  = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
     let labelElements = {};
     let visibleBodies = new Set();
     let scenario     = 'pluto_system';
@@ -556,6 +557,11 @@
     controls3D.minDistance    = 0.2;
     controls3D.maxDistance    = 300;
     controls3D.target.set(0, 0, 0);
+    controls3D.mouseButtons = {
+        LEFT: THREE.MOUSE.ROTATE,
+        MIDDLE: THREE.MOUSE.PAN,
+        RIGHT: THREE.MOUSE.PAN,
+    };
 
     scene3D.add(new THREE.AmbientLight(0xffffff, 0.5));
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -949,6 +955,33 @@
         showRefGrid = e.target.checked;
         if (refGrid) refGrid.visible = showRefGrid;
     });
+
+    let rightClickStart = null;
+    renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+    renderer.domElement.addEventListener('pointerdown', e => {
+        if (e.button !== 2) return;
+        if (!isNBodyScenario(document.getElementById('scenarioSelect').value)) return;
+        if (e.target !== renderer.domElement) return;
+        e.stopImmediatePropagation();
+        rightClickStart = { x: e.clientX, y: e.clientY };
+    }, true);
+    renderer.domElement.addEventListener('pointerup', e => {
+        if (e.button !== 2 || !rightClickStart) return;
+        const d = Math.hypot(e.clientX - rightClickStart.x, e.clientY - rightClickStart.y);
+        rightClickStart = null;
+        if (d > 8) return;
+        if (!isNBodyScenario(document.getElementById('scenarioSelect').value)) return;
+        if (e.target !== renderer.domElement) return;
+        const rect = renderer.domElement.getBoundingClientRect();
+        const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera3D);
+        const hit = new THREE.Vector3();
+        if (!raycaster.ray.intersectPlane(pickPlane, hit)) return;
+        addBodyAtPhysics(hit.x / worldScale, hit.y / worldScale);
+    }, true);
+    window.addEventListener('pointercancel', () => { rightClickStart = null; });
 
     // Scenario switcher
     document.getElementById('scenarioSelect').addEventListener('change', () => {
