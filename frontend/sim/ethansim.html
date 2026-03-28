@@ -296,6 +296,10 @@
                     <input type="checkbox" id="showCOMCheck" checked>
                     Show Center of Mass
                 </label>
+                <label class="checkbox-row">
+                    <input type="checkbox" id="showGridCheck">
+                    Show reference plane (grid)
+                </label>
             </div>
             <div class="setting-label" style="margin-top:8px"><span>Visibility</span></div>
             <div id="objectsList"></div>
@@ -519,6 +523,8 @@
     let showTrails   = true;
     let showLabels   = true;
     let showCOM      = true;
+    let showRefGrid  = false;
+    let refGrid      = null;
     let labelElements = {};
     let visibleBodies = new Set();
     let scenario     = 'pluto_system';
@@ -584,6 +590,23 @@
             color: 0xffffff, size: 0.8, sizeAttenuation: true, transparent: true, opacity: 0.6
         }));
         scene3D.add(starPoints);
+        rebuildRefGrid();
+    }
+
+    function rebuildRefGrid() {
+        if (refGrid) {
+            scene3D.remove(refGrid);
+            refGrid.geometry.dispose();
+            refGrid.material.dispose();
+            refGrid = null;
+        }
+        const extent = Math.max(24, 80 / (worldScale || 1));
+        const divisions = Math.min(60, Math.max(10, Math.round(extent)));
+        refGrid = new THREE.GridHelper(extent, divisions, 0x3d4f63, 0x21262d);
+        refGrid.rotation.x = Math.PI / 2;
+        refGrid.position.set(0, 0, -0.02);
+        refGrid.visible = showRefGrid;
+        scene3D.add(refGrid);
     }
 
     function computeWorldScale() {
@@ -597,6 +620,7 @@
             maxR = Math.max(maxR, Math.abs(SUN_MARKER.x), Math.abs(SUN_MARKER.y));
         }
         worldScale = 12 / (maxR || 1);
+        rebuildRefGrid();
     }
 
     function disposeSceneObjects() {
@@ -921,6 +945,10 @@
     document.getElementById('showLabelsCheck').addEventListener('change', e => { showLabels = e.target.checked; });
     document.getElementById('showTrailsCheck').addEventListener('change', e => { showTrails = e.target.checked; });
     document.getElementById('showCOMCheck').addEventListener('change', e => { showCOM = e.target.checked; });
+    document.getElementById('showGridCheck').addEventListener('change', e => {
+        showRefGrid = e.target.checked;
+        if (refGrid) refGrid.visible = showRefGrid;
+    });
 
     // Scenario switcher
     document.getElementById('scenarioSelect').addEventListener('change', () => {
