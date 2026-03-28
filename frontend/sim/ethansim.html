@@ -267,7 +267,10 @@
                 <div class="setting-label"><span>Scenario</span></div>
                 <select class="setting-select" id="scenarioSelect">
                     <option value="pluto_system">Pluto System</option>
-                    <option value="three_body">Three-Body Problem</option>
+                    <option value="three_body">Three-Body — Pythagorean (custom ICs)</option>
+                    <option value="three_body_figure8">Three-Body — Figure-eight (periodic)</option>
+                    <option value="three_body_lagrange">Three-Body — Lagrange triangle (periodic)</option>
+                    <option value="three_body_trojan">Three-Body — Binary + tiny Trojan / probe</option>
                 </select>
             </div>
             <div class="setting-group">
@@ -418,7 +421,7 @@
             isPlaying = false;
             document.getElementById('playPauseBtn').innerHTML = '&#9654;';
             document.getElementById('scenarioLabel').textContent =
-                scenario === 'three_body' ? 'Three-Body Problem' : 'Pluto System';
+                SCENARIO_LABELS[scenario] || scenario;
             clearLabels();
             initVisibility();
             computeWorldScale();
@@ -461,11 +464,21 @@
     }
 
     function randomizeIC() {
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < icState.masses.length; i++) {
             icState.masses[i]      = +(1 + Math.random() * 5).toFixed(2);
             icState.positions[i]   = [+((Math.random()-0.5)*4).toFixed(3), +((Math.random()-0.5)*4).toFixed(3)];
             icState.velocities[i]  = [0, 0];
         }
+        buildICEditor();
+        runWithIC();
+    }
+
+    function addBodyAtPhysics(x, y) {
+        if (!isNBodyScenario(document.getElementById('scenarioSelect').value)) return;
+        const defMass = 1;
+        icState.masses.push(defMass);
+        icState.positions.push([+x.toFixed(4), +y.toFixed(4)]);
+        icState.velocities.push([0, 0]);
         buildICEditor();
         runWithIC();
     }
@@ -477,8 +490,27 @@
     const labelsContainer = document.getElementById('labelsContainer');
     const loadingEl = document.getElementById('loading');
 
-    const BODY_COLORS = ['#4dabf7', '#ff6b6b', '#51cf66'];
+    const BODY_COLORS = [
+        '#4dabf7', '#ff6b6b', '#51cf66', '#ffd43b', '#cc5de8',
+        '#ff922b', '#20c997', '#339af0', '#f06595', '#94d82d',
+    ];
     const COM_COLOR   = '#ffd43b';
+
+    const SCENARIO_LABELS = {
+        pluto_system: 'Pluto System',
+        three_body: 'Three-Body (Pythagorean)',
+        three_body_figure8: 'Figure-Eight Orbit',
+        three_body_lagrange: 'Lagrange Triangle',
+        three_body_trojan: 'Binary + Trojan',
+    };
+
+    function isNBodyScenario(s) {
+        return s && s !== 'pluto_system' && s.startsWith('three_body');
+    }
+
+    function bodyColorHex(i) {
+        return BODY_COLORS[i % BODY_COLORS.length];
+    }
 
     let history_data = [];
     let currentStep  = 0;
@@ -585,10 +617,12 @@
         const s0 = history_data[0];
 
         s0.bodies.forEach((body, i) => {
-            const col = scenario === 'three_body'
-                ? parseInt(BODY_COLORS[i % BODY_COLORS.length].slice(1), 16)
+            const col = isNBodyScenario(scenario)
+                ? parseInt(bodyColorHex(i).slice(1), 16)
                 : 0xffffff;
-            const r = scenario === 'three_body' ? 0.08 + Math.sqrt(body.mass) * 0.07 : 0.28;
+            const r = isNBodyScenario(scenario)
+                ? Math.max(0.035, 0.06 + Math.sqrt(Math.max(body.mass, 1e-12)) * 0.07)
+                : 0.28;
             const mesh = new THREE.Mesh(
                 new THREE.SphereGeometry(r, 20, 20),
                 new THREE.MeshPhongMaterial({ color: col, emissive: col, emissiveIntensity: 0.35 })
@@ -607,8 +641,8 @@
             const tGeo = new THREE.BufferGeometry();
             tGeo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
             tGeo.setDrawRange(0, 0);
-            const tCol = scenario === 'three_body'
-                ? parseInt(BODY_COLORS[i % BODY_COLORS.length].slice(1), 16)
+            const tCol = isNBodyScenario(scenario)
+                ? parseInt(bodyColorHex(i).slice(1), 16)
                 : 0xaab0c8;
             const line = new THREE.Line(tGeo, new THREE.LineBasicMaterial({
                 color: tCol, transparent: true, opacity: 0.55
@@ -661,10 +695,10 @@
     }
 
     function setupScenarioUI() {
-        const isThreeBody = scenario === 'three_body';
-        document.getElementById('icTabBtn').style.display = isThreeBody ? '' : 'none';
+        const nbody = isNBodyScenario(scenario);
+        document.getElementById('icTabBtn').style.display = nbody ? '' : 'none';
         document.getElementById('scenarioSelect').value = scenario;
-        if (isThreeBody) {
+        if (nbody) {
             const s0 = history_data[0];
             icState.masses     = s0.bodies.map(b => b.mass);
             icState.positions  = s0.bodies.map(b => [b.position[0], b.position[1]]);
@@ -676,8 +710,9 @@
     function buildICEditor() {
         const editor = document.getElementById('icEditor');
         editor.innerHTML = '';
-        for (let i = 0; i < 3; i++) {
-            const color = BODY_COLORS[i];
+        const n = icState.masses.length;
+        for (let i = 0; i < n; i++) {
+            const color = bodyColorHex(i);
             const div = document.createElement('div');
             div.className = 'ic-body';
             div.style.borderLeftColor = color;
@@ -744,8 +779,8 @@
             label.appendChild(cb);
             const span = document.createElement('span');
             const bodyIdx = history_data[0].bodies.findIndex(b => b.name === name);
-            if (bodyIdx >= 0 && scenario === 'three_body')
-                span.style.color = BODY_COLORS[bodyIdx % BODY_COLORS.length];
+            if (bodyIdx >= 0 && isNBodyScenario(scenario))
+                span.style.color = bodyColorHex(bodyIdx);
             span.textContent = name;
             label.appendChild(span);
             list.appendChild(label);
@@ -803,8 +838,8 @@
                 if (!visibleBodies.has(body.name) || i >= bodyMeshes.length) return;
                 const sp = projectToScreen(bodyMeshes[i].position);
                 if (!sp) return;
-                const col  = scenario === 'three_body' ? BODY_COLORS[i % BODY_COLORS.length] : '#fff';
-                const pxR  = scenario === 'three_body' ? (10 + Math.sqrt(body.mass) * 5) : 12;
+                const col  = isNBodyScenario(scenario) ? bodyColorHex(i) : '#fff';
+                const pxR  = isNBodyScenario(scenario) ? (10 + Math.sqrt(Math.max(body.mass, 1e-9)) * 5) : 12;
                 setLabel(i, body.name, sp.x + pxR, sp.y - 4, col);
             });
             if (sceneSunMesh && visibleBodies.has('Sun')) {
