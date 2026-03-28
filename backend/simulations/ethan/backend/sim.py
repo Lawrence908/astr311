@@ -1,5 +1,9 @@
-import numpy as np
+from __future__ import annotations
+
 import math
+from typing import Optional
+
+import numpy as np
 
 G_SI = 6.67430e-11  # Gravitational constant in m^3 kg^-1 s^-2
 
@@ -57,37 +61,122 @@ def simulate(bodies, dt, steps, G=None, softening=0.0, record_every=1):
 
     return history
 
+def _center_com_frame(
+    positions: list,
+    velocities: list,
+    masses: list,
+) -> tuple[list, list]:
+    """Translate positions and boost velocities so COM position and momentum are zero."""
+    n = len(masses)
+    total_mass = float(sum(masses))
+    com_pos = np.zeros(2)
+    com_vel = np.zeros(2)
+    for i in range(n):
+        com_pos += masses[i] * np.array(positions[i], dtype=float)
+        com_vel += masses[i] * np.array(velocities[i], dtype=float)
+    com_pos /= total_mass
+    com_vel /= total_mass
+    new_pos = [list(np.array(positions[i], dtype=float) - com_pos) for i in range(n)]
+    new_vel = [list(np.array(velocities[i], dtype=float) - com_vel) for i in range(n)]
+    return new_pos, new_vel
+
+
+def create_bodies_from_ic(
+    positions: list,
+    velocities: list,
+    masses: list,
+    names: Optional[list[str]] = None,
+) -> list[Body]:
+    """Build bodies from raw ICs, centered on the center-of-mass frame."""
+    pos, vel = _center_com_frame(positions, velocities, masses)
+    n = len(masses)
+    if names is None:
+        names = [f"Body {i + 1}" for i in range(n)]
+    return [Body(masses[i], pos[i], vel[i], names[i]) for i in range(n)]
+
+
 def create_three_body_problem(positions=None, velocities=None, masses=None):
     """Create a chaotic three-body problem.
     Default: three bodies at vertices of a triangle, starting near rest.
     User can override positions, velocities, masses."""
-    n = 3
     if masses is None:
         masses = [3.0, 4.0, 5.0]
     if positions is None:
         # Pythagorean three-body problem: vertices of a 3-4-5 right triangle
         positions = [[1.0, 3.0], [-2.0, -1.0], [1.0, -1.0]]
     if velocities is None:
-        # Start from rest — gravity alone drives the chaos
         velocities = [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
 
-    # Center on COM and zero COM velocity
-    total_mass = sum(masses)
-    com_pos = np.zeros(2)
-    com_vel = np.zeros(2)
-    for i in range(n):
-        com_pos += masses[i] * np.array(positions[i])
-        com_vel += masses[i] * np.array(velocities[i])
-    com_pos /= total_mass
-    com_vel /= total_mass
-    positions = [list(np.array(positions[i]) - com_pos) for i in range(n)]
-    velocities = [list(np.array(velocities[i]) - com_vel) for i in range(n)]
+    return create_bodies_from_ic(positions, velocities, masses)
 
-    bodies = [
-        Body(masses[i], positions[i], velocities[i], f"Body {i+1}")
-        for i in range(n)
+
+def create_figure_eight():
+    """Moore–Chenciner–Montgomery figure-eight: three equal masses, G=1, periodic choreography."""
+    # Classical initial data (e.g. Simó); total momentum and COM are zero.
+    positions = [
+        [-0.97000436, 0.24308753],
+        [0.97000436, -0.24308753],
+        [0.0, 0.0],
     ]
-    return bodies
+    velocities = [
+        [0.4662036850, 0.4323657300],
+        [0.4662036850, 0.4323657300],
+        [-0.93240737, -0.86473146],
+    ]
+    masses = [1.0, 1.0, 1.0]
+    names = ["Figure-8 A", "Figure-8 B", "Figure-8 C"]
+    return create_bodies_from_ic(positions, velocities, masses, names)
+
+
+def create_lagrange_equilateral():
+    """Three equal masses at vertices of an equilateral triangle, rotating as a relative equilibrium."""
+    G = 1.0
+    m = 1.0
+    L = 2.0  # side length
+    omega = math.sqrt(3.0 * G * m / (L**3))
+    R = L / math.sqrt(3.0)  # circumradius from centroid to vertex
+    positions = []
+    velocities = []
+    for k in range(3):
+        theta = 2.0 * math.pi * k / 3.0
+        px = R * math.cos(theta)
+        py = R * math.sin(theta)
+        positions.append([px, py])
+        velocities.append([-omega * py, omega * px])
+    masses = [m, m, m]
+    names = ["Lagrange 1", "Lagrange 2", "Lagrange 3"]
+    return create_bodies_from_ic(positions, velocities, masses, names)
+
+
+def create_binary_with_trojan():
+    """Two massive bodies in a circular orbit plus a tiny third body at the L4 equilateral point."""
+    G = 1.0
+    m0, m1, m2 = 1.0, 0.01, 1e-5
+    D = 1.0
+    M = m0 + m1
+    omega = math.sqrt(G * M / D**3)
+    x0 = -m1 / M * D
+    x1 = m0 / M * D
+    p0 = [x0, 0.0]
+    p1 = [x1, 0.0]
+    dx = x1 - x0
+    ang = math.pi / 3.0
+    rx = dx * math.cos(ang)
+    ry = dx * math.sin(ang)
+    p2 = [p0[0] + rx, p0[1] + ry]
+    positions = [p0, p1, p2]
+    masses = [m0, m1, m2]
+    com = np.zeros(2)
+    mt = sum(masses)
+    for i in range(3):
+        com += masses[i] * np.array(positions[i], dtype=float)
+    com /= mt
+    velocities = []
+    for i in range(3):
+        r = np.array(positions[i], dtype=float) - com
+        velocities.append([-omega * r[1], omega * r[0]])
+    names = ["Primary", "Companion", "Trojan"]
+    return create_bodies_from_ic(positions, velocities, masses, names)
 
 def create_pluto_system():
     """Full Pluto system: Pluto + Charon + Nix + Styx + Kerberos + Hydra.
