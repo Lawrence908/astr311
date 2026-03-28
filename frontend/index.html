@@ -775,7 +775,7 @@ function launchSim(simId, cardEl) {
   // Navigate to simulation page with token passed in sessionStorage
   sessionStorage.setItem('simlab_launch_token', sessionToken);
   sessionStorage.setItem('simlab_launch_sim', simId);
-  window.location.href = `/sim/${simId}?token=${encodeURIComponent(sessionToken)}`;
+  window.location.href = `/sim/${simId}.html?token=${encodeURIComponent(sessionToken)}`;  //use the simId to get the html file from the sim directory
 }
 
 // ============================================================================

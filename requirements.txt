@@ -1,5 +1,6 @@
-numpy
-matplotlib
-dotenv
-fastapi
-uvicorn
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+numpy==2.0.2
+torch          # GPU support requires CUDA toolkit
+msgpack
+python-jose    # JWT auth (JavaScript Object Signing and Encryption)

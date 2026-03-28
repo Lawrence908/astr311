@@ -7,4 +7,4 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 #run the uvicorn server
-uvicorn controller:app --host 10.10.10.2 --port 8000
+uvicorn controller:app --host 10.10.10.4 --port 8000

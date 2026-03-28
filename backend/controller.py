@@ -4,8 +4,8 @@ controller.py — Secure WebSocket Controller
 Manages authentication, session lifecycle, and simulation process management.
 Simulations run as isolated threads; the controller brokers all client communication.
 
-HTML is served statically by nginx from /var/www/gravsim/.
-This controller only handles: /auth, /simulations, /health, /ws
+Index and /sim/*.html may be served by nginx from /var/www/gravsim/ in production;
+this app also serves them for local dev. API: /auth, /simulations, /health, /ws
 
 Run with:
     uvicorn controller:app --host 10.10.10.2 --port 8000
@@ -112,6 +112,25 @@ FRONTEND_DIR = BASE_DIR.parent / "frontend"
 @app.get("/")
 def dashboard():
     return FileResponse(FRONTEND_DIR / "index.html")
+
+
+@app.get("/sim/{name}")
+def simulation_page(name: str):
+    """
+    Serve a simulation's static HTML. Accepts either registry id (e.g. ethansim)
+    or filename (e.g. ethansim.html) so nginx-style /sim/*.html links work too.
+    """
+    if name.endswith(".html"):
+        fname = name
+    elif name in SIMULATION_REGISTRY:
+        fname = SIMULATION_REGISTRY[name].get("html_file", f"{name}.html")
+    else:
+        raise HTTPException(status_code=404, detail="Unknown simulation")
+
+    path = FRONTEND_DIR / "sim" / fname
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Simulation page not found")
+    return FileResponse(path)
 
 
 @app.post("/auth")
