@@ -182,7 +182,7 @@ class _ReadyProxy:
 
 
 # ============================================================================
-# HELPERS (mirror main.py)
+# HELPERS — comma-separated vector parsing for WebSocket run params
 # ============================================================================
 
 def _parse_vecs(s: str, n: int):
