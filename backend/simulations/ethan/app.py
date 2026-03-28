@@ -18,6 +18,8 @@ Controller interface required:
   AsyncSimulator.sim.get_state() -> dict   (for initial connect message)
 """
 
+from __future__ import annotations
+
 import threading
 import traceback
 from queue import Queue, Empty
@@ -25,8 +27,12 @@ from queue import Queue, Empty
 # sim.py lives at simulations/ethan/backend/sim.py
 from simulations.ethan.backend.sim import (
     simulate,
-    create_three_body_problem,
+    create_bodies_from_ic,
+    create_binary_with_trojan,
+    create_figure_eight,
+    create_lagrange_equilateral,
     create_pluto_system,
+    create_three_body_problem,
 )
 
 
@@ -84,19 +90,45 @@ class AsyncSimulator:
             scenario = data.get("scenario", "pluto_system")
 
             if scenario == "three_body":
-                pos  = data.get("pos")
-                vel  = data.get("vel")
+                pos = data.get("pos")
+                vel = data.get("vel")
                 mass = data.get("mass")
                 steps = int(data.get("steps", 12000))
-                dt    = float(data.get("dt", 0.0005))
+                dt = float(data.get("dt", 0.0005))
 
-                positions  = _parse_vecs(pos,  3) if pos  else None
-                velocities = _parse_vecs(vel,  3) if vel  else None
-                masses     = _parse_floats(mass, 3) if mass else None
+                parsed = _parse_ic_triples(pos, vel, mass)
+                if parsed is None:
+                    bodies = create_three_body_problem()
+                else:
+                    positions, velocities, masses = parsed
+                    bodies = create_bodies_from_ic(positions, velocities, masses)
+                history = simulate(
+                    bodies, dt, steps, G=1.0, softening=0.05, record_every=20
+                )
 
-                bodies  = create_three_body_problem(positions, velocities, masses)
-                history = simulate(bodies, dt, steps, G=1.0,
-                                   softening=0.05, record_every=20)
+            elif scenario == "three_body_figure8":
+                steps = int(data.get("steps", 20000))
+                dt = float(data.get("dt", 0.002))
+                bodies = create_figure_eight()
+                history = simulate(
+                    bodies, dt, steps, G=1.0, softening=0.001, record_every=40
+                )
+
+            elif scenario == "three_body_lagrange":
+                steps = int(data.get("steps", 12000))
+                dt = float(data.get("dt", 0.01))
+                bodies = create_lagrange_equilateral()
+                history = simulate(
+                    bodies, dt, steps, G=1.0, softening=0.001, record_every=30
+                )
+
+            elif scenario == "three_body_trojan":
+                steps = int(data.get("steps", 32000))
+                dt = float(data.get("dt", 0.0002))
+                bodies = create_binary_with_trojan()
+                history = simulate(
+                    bodies, dt, steps, G=1.0, softening=0.001, record_every=40
+                )
 
             elif scenario == "pluto_system":
                 steps = int(data.get("steps", 4000))
@@ -176,7 +208,13 @@ class _ReadyProxy:
             "type": "ready",
             "data": {
                 "message": "Connected — send run_simulation to begin",
-                "scenarios": ["pluto_system", "three_body"],
+                "scenarios": [
+                    "pluto_system",
+                    "three_body",
+                    "three_body_figure8",
+                    "three_body_lagrange",
+                    "three_body_trojan",
+                ],
             },
         }
 
@@ -185,11 +223,18 @@ class _ReadyProxy:
 # HELPERS — comma-separated vector parsing for WebSocket run params
 # ============================================================================
 
-def _parse_vecs(s: str, n: int):
-    vals = [float(x) for x in s.split(",")]
-    return [vals[i * 2:(i + 1) * 2] for i in range(n)]
-
-
-def _parse_floats(s: str, n: int):
-    vals = [float(x) for x in s.split(",")]
-    return vals[:n]
+def _parse_ic_triples(
+    pos: str | None, vel: str | None, mass: str | None
+) -> tuple[list, list, list] | None:
+    """Parse comma-separated pos (x,y pairs), vel, mass for N bodies; N >= 1."""
+    if not pos or not vel or not mass:
+        return None
+    pv = [float(x) for x in pos.split(",")]
+    vv = [float(x) for x in vel.split(",")]
+    mv = [float(x) for x in mass.split(",")]
+    n = len(mv)
+    if n < 1 or len(pv) != 2 * n or len(vv) != 2 * n:
+        return None
+    positions = [[pv[2 * i], pv[2 * i + 1]] for i in range(n)]
+    velocities = [[vv[2 * i], vv[2 * i + 1]] for i in range(n)]
+    return positions, velocities, mv
