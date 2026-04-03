@@ -102,10 +102,10 @@ The static frontend is served by Nginx on the AWS EC2 instance. All simulation c
 
 **`backend/controller.py`** — FastAPI application and WebSocket broker.
 
-- `POST /auth` — Validates password against `SIMLAB_PASSWORD` environment variable, returns a JWT token.
+- `POST /auth` — Validates password against the `SIMLAB_PASSWORD` environment variable and returns an opaque random authentication token.
 - `GET /simulations` — Lists available simulation modules.
 - `GET /health` — Reports CUDA availability and active session count.
-- `WebSocket /ws?token=T&sim_id=X` — Bi-directional simulation stream. The controller authenticates the token, instantiates the requested `AsyncSimulator`, and proxies commands and state messages between the client and the simulation worker thread. State is serialized with msgpack for efficient binary transport. GPU memory is cleaned up on disconnect.
+- `WebSocket /ws?token=T&sim_id=X` — Bi-directional simulation stream. The controller validates the token, instantiates the requested `AsyncSimulator`, and proxies commands and state messages between the client and the simulation worker thread. State is serialized with msgpack for efficient binary transport. GPU memory is cleaned up on disconnect.
 
 Each simulation module implements the same `AsyncSimulator` interface:
 - A worker thread runs the physics loop
