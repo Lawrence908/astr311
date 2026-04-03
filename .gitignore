@@ -1,3 +1,6 @@
+# Local secrets (compose: SIMLAB_PASSWORD)
+.env
+
 # Virtual environments
 .venv/
 venv/
