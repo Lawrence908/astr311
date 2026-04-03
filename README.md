@@ -1,4 +1,5 @@
-# ASTR311 Gravity Simulator
+# **Gravitational Systems** - *The Human Experience*
+## ASTR311 Group Project
 
 A multi-scenario gravitational physics simulator built for the ASTR311 course. Three independent simulation backends are served over a real-time WebSocket API and rendered in the browser using Canvas and Three.js.
 
