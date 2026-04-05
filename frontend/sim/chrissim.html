@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ChrisSim — Big Bang Simulator</title>
+<style>
+:root {
+  --bg-primary:    #000000;
+  --bg-secondary:  #161b22;
+  --bg-tertiary:   #21262d;
+  --border-primary:#30363d;
+  --text-primary:  #c9d1d9;
+  --text-secondary:#8b949e;
+  --accent:        #58a6ff;
+  --accent-hover:  #79c0ff;
+  --success:       #3fb950;
+  --danger:        #f85149;
+  --warning:       #f0883e;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body, html {
+  width:100%; height:100%; overflow:hidden;
+  background:var(--bg-primary);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  color:var(--text-primary); font-size:14px;
+}
+canvas { display:block; }
+
+/* TOP BAR */
+#topbar {
+  position:absolute; top:0; left:0; right:0; height:40px;
+  background:rgba(22,27,34,0.92); border-bottom:1px solid var(--border-primary);
+  display:flex; align-items:center; padding:0 12px; gap:12px;
+  z-index:10; backdrop-filter:blur(8px);
+}
+#back-btn {
+  background:var(--bg-tertiary); border:1px solid var(--border-primary);
+  color:var(--text-secondary); padding:4px 12px; border-radius:4px;
+  cursor:pointer; font-size:12px; font-family:inherit; transition:all 0.2s;
+}
+#back-btn:hover { border-color:var(--accent); color:var(--accent); }
+.topbar-title  { font-size:13px; font-weight:600; }
+.topbar-sep    { color:var(--border-primary); font-size:16px; }
+.topbar-spacer { flex:1; }
+.conn-badge {
+  font-family:'Monaco',monospace; font-size:10px;
+  padding:2px 8px; border-radius:3px; border:1px solid;
+}
+.conn-badge.connected    { color:var(--success); border-color:var(--success); background:rgba(63,185,80,0.08); }
+.conn-badge.disconnected { color:var(--danger);  border-color:var(--danger);  background:rgba(248,81,73,0.08); }
+.conn-badge.connecting   { color:var(--warning); border-color:var(--warning); background:rgba(240,136,62,0.08); }
+
+/* INFO OVERLAY */
+#info {
+  position:absolute; top:56px; left:16px;
+  color:var(--text-secondary); font-size:11px;
+  background:var(--bg-secondary); padding:10px 12px;
+  border-radius:6px; border:1px solid var(--border-primary);
+  max-width:240px; font-family:'Monaco',monospace; line-height:1.6;
+  pointer-events:none; z-index:5;
+}
+
+/* SIDEBAR */
+#ui {
+  position:absolute; top:56px; right:16px;
+  background:var(--bg-secondary); padding:16px; border-radius:6px;
+  border:1px solid var(--border-primary); width:305px;
+  box-shadow:0 8px 24px rgba(0,0,0,0.5);
+  max-height:calc(100vh - 72px); overflow-y:auto; z-index:10;
+  transition:width 0.2s, padding 0.2s;
+}
+#ui.minimized { width:36px; padding:8px; overflow:hidden; min-height:36px; max-height:36px; }
+#ui.minimized > *:not(#ui-minimize-btn) { display:none; }
+#ui-minimize-btn {
+  position:absolute; top:8px; right:8px;
+  background:none; border:none; color:var(--text-secondary);
+  cursor:pointer; font-size:14px; padding:0; line-height:1;
+  width:20px; height:20px; display:flex; align-items:center; justify-content:center;
+  border-radius:3px; transition:color 0.2s;
+}
+#ui-minimize-btn:hover { color:var(--accent); background:none; border:none; }
+#ui h3 {
+  margin:0 0 10px; font-size:11px; font-weight:600;
+  padding-bottom:8px; border-bottom:1px solid var(--border-primary);
+  color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.08em;
+}
+.section { margin:14px 0 0; padding:14px 0 0; border-top:1px solid var(--border-primary); }
+.control { margin:9px 0; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.control label { flex:1; color:var(--text-secondary); font-size:12px; }
+.control input[type="range"] {
+  flex:2; height:3px; background:var(--bg-tertiary);
+  border-radius:2px; outline:none; -webkit-appearance:none;
+}
+.control input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance:none; width:14px; height:14px;
+  background:var(--accent); border-radius:50%; cursor:pointer;
+}
+.control input[type="range"]::-webkit-slider-thumb:hover { background:var(--accent-hover); }
+.control span {
+  min-width:52px; text-align:right; color:var(--text-primary);
+  font-size:11px; font-family:'Monaco',monospace;
+}
+button {
+  background:var(--bg-tertiary); border:1px solid var(--border-primary);
+  color:var(--text-primary); padding:6px 12px; border-radius:6px;
+  cursor:pointer; font-family:inherit; font-size:12px; transition:all 0.2s;
+}
+button:hover { background:var(--bg-primary); border-color:var(--accent); color:var(--accent); }
+button:active { transform:scale(0.98); }
+.btn-primary {
+  display:block; width:100%; padding:9px; text-align:center;
+  background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;
+}
+.btn-primary:hover { background:var(--accent-hover); border-color:var(--accent-hover); color:#fff; }
+.btn-primary:disabled { opacity:0.4; cursor:not-allowed; transform:none; }
+
+/* PROGRESS BAR */
+#progress-section { display:none; }
+#progress-bar-wrap {
+  margin-top:8px; height:6px; background:var(--bg-tertiary);
+  border-radius:3px; overflow:hidden;
+}
+#progress-bar {
+  height:100%; width:0%; background:var(--accent);
+  transition:width 0.3s ease; border-radius:3px;
+}
+#progress-label {
+  font-size:10px; color:var(--text-secondary);
+  font-family:'Monaco',monospace; margin-top:4px; text-align:center;
+}
+
+/* PLAYBACK CONTROLS */
+#playback-section { display:none; }
+#timeline-wrap { margin:8px 0; }
+#timelineSlider {
+  width:100%; height:3px; background:var(--bg-tertiary);
+  border-radius:2px; outline:none; -webkit-appearance:none;
+}
+#timelineSlider::-webkit-slider-thumb {
+  -webkit-appearance:none; width:14px; height:14px;
+  background:var(--accent); border-radius:50%; cursor:pointer;
+}
+#playback-btns { display:flex; gap:8px; margin-top:8px; }
+#playback-btns button { flex:1; padding:7px; text-align:center; }
+#playBtn.playing { background:rgba(63,185,80,0.12); border-color:var(--success); color:var(--success); }
+.playback-info {
+  display:flex; justify-content:space-between;
+  font-size:10px; font-family:'Monaco',monospace;
+  color:var(--text-secondary); margin-top:4px;
+}
+
+/* DISCONNECT OVERLAY */
+#disconnect-overlay {
+  display:none; position:absolute; inset:0;
+  background:rgba(0,0,0,0.75); align-items:center; justify-content:center;
+  z-index:50; backdrop-filter:blur(4px);
+}
+#disconnect-overlay.show { display:flex; }
+.disconnect-box {
+  background:var(--bg-secondary); border:1px solid var(--border-primary);
+  border-radius:6px; padding:32px; text-align:center; max-width:340px; width:90%;
+}
+.disconnect-box h3 { margin-bottom:8px; color:var(--warning); }
+.disconnect-box p { color:var(--text-secondary); font-size:12px; margin-bottom:20px; font-family:'Monaco',monospace; }
+.disconnect-box button { width:100%; margin:5px 0; }
+.disconnect-box .primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+.disconnect-box .primary:hover { background:var(--accent-hover); color:#fff; }
+
+/* CLICK INDICATOR */
+#clickIndicator {
+  position:absolute; width:30px; height:30px;
+  border:2px solid var(--accent); border-radius:50%;
+  pointer-events:none; display:none;
+  animation:pulse 0.5s ease-out forwards;
+}
+@keyframes pulse {
+  0%   { transform:scale(0.5); opacity:1; }
+  100% { transform:scale(2);   opacity:0; }
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <button id="back-btn" onclick="navigateHome()">← Home</button>
+  <span class="topbar-sep">/</span>
+  <span class="topbar-title">Big Bang Simulator</span>
+  <div class="topbar-spacer"></div>
+  <div class="conn-badge connecting" id="conn-badge">CONNECTING</div>
+</div>
+
+<div id="info">Connecting...</div>
+<div id="clickIndicator"></div>
+
+<!-- DISCONNECT OVERLAY -->
+<div id="disconnect-overlay">
+  <div class="disconnect-box">
+    <h3>⚠ Connection Lost</h3>
+    <p>Server connection interrupted.<br>Reconnecting automatically...</p>
+    <button class="primary" onclick="reconnect()">Reconnect Now</button>
+    <button onclick="navigateHome()">Return to Home</button>
+  </div>
+</div>
+
+<!-- CONTROL PANEL -->
+<div id="ui">
+  <button id="ui-minimize-btn" title="Minimize panel" onclick="toggleSidebar()">◀</button>
+
+  <h3>Big Bang</h3>
+
+  <div class="section">
+    <h3>Parameters</h3>
+    <div class="control">
+      <label>Particles</label>
+      <input type="range" id="paramN" min="50" max="5000" step="50" value="500">
+      <span id="paramNVal">500</span>
+    </div>
+    <div class="control">
+      <label>Steps</label>
+      <input type="range" id="paramSteps" min="100" max="10000" step="100" value="1000">
+      <span id="paramStepsVal">1000</span>
+    </div>
+    <div class="control">
+      <label>Expansion</label>
+      <input type="range" id="paramVRadial" min="0.1" max="5.0" step="0.1" value="1.0">
+      <span id="paramVRadialVal">1.0</span>
+    </div>
+    <div class="control">
+      <label>Radius</label>
+      <input type="range" id="paramRMax" min="0.1" max="3.0" step="0.1" value="0.5">
+      <span id="paramRMaxVal">0.5</span>
+    </div>
+    <div class="control">
+      <label>Softening</label>
+      <input type="range" id="paramSoft" min="0.01" max="0.5" step="0.01" value="0.05">
+      <span id="paramSoftVal">0.05</span>
+    </div>
+    <div style="margin-top:12px">
+      <button class="btn-primary" id="runBtn" onclick="runSimulation()">▶ Run Simulation</button>
+    </div>
+  </div>
+
+  <div class="section" id="progress-section">
+    <h3>Computing</h3>
+    <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+    <div id="progress-label">0%</div>
+    <button style="width:100%;margin-top:8px" onclick="cancelSimulation()">✕ Cancel</button>
+  </div>
+
+  <div class="section" id="playback-section">
+    <h3>Playback</h3>
+    <div id="timeline-wrap">
+      <input type="range" id="timelineSlider" min="0" max="0" value="0">
+    </div>
+    <div class="playback-info">
+      <span id="frameLabel">Frame 0</span>
+      <span id="totalFramesLabel">/ 0</span>
+    </div>
+    <div id="playback-btns">
+      <button id="playBtn" onclick="togglePlay()">▶ Play</button>
+      <button onclick="resetPlayback()">⏮ Reset</button>
+    </div>
+    <div class="control" style="margin-top:10px">
+      <label>Speed</label>
+      <input type="range" id="speedSlider" min="1" max="10" step="1" value="3">
+      <span id="speedVal">3×</span>
+    </div>
+    <div style="margin-top:10px; font-size:10px; color:var(--text-secondary); font-family:'Monaco',monospace; line-height:1.6">
+      <span id="replayStats"></span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>View</h3>
+    <div class="control">
+      <label>Particle size</label>
+      <input type="range" id="ptSizeSlider" min="0.1" max="3.0" step="0.1" value="0.8">
+      <span id="ptSizeVal">0.8</span>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@msgpack/msgpack@2.8.0/dist.es5+umd/msgpack.min.js"></script>
+<script>
+// ============================================================================
+// TOKEN / SIM ID
+// ============================================================================
+const urlParams = new URLSearchParams(window.location.search);
+let apiKey = urlParams.get('token') || sessionStorage.getItem('simlab_launch_token');
+const SIM_ID = 'chrissim';
+if (!apiKey) window.location.href = '/';
+
+// ============================================================================
+// STATE
+// ============================================================================
+let scene, camera, renderer, particleSystem, particleGeo;
+let ws;
+let isDragging = false, prevMouseX = 0, prevMouseY = 0;
+let cameraTheta = 0, cameraPhi = Math.PI / 3, cameraRadius = 8;
+let autoRotate = true;
+let wsReconnectTimer = null;
+let isConnected = false;
+let isNavigatingHome = false;
+
+// Replay state
+let replayFrames  = [];   // array of Float32Array (flat xyz per particle)
+let replayN       = 0;
+let currentFrame  = 0;
+let isPlaying     = false;
+let playInterval  = null;
+let playSpeed     = 3;
+
+// ============================================================================
+// NAVIGATION
+// ============================================================================
+function navigateHome() {
+  isNavigatingHome = true;
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    try { ws.send(MessagePack.encode({ type: 'stop_simulation' })); } catch(e) {}
+    setTimeout(() => { window.location.href = '/'; }, 150);
+  } else {
+    window.location.href = '/';
+  }
+}
+
+function toggleSidebar() {
+  const ui  = document.getElementById('ui');
+  const btn = document.getElementById('ui-minimize-btn');
+  const minimized = ui.classList.toggle('minimized');
+  btn.textContent = minimized ? '▶' : '◀';
+  btn.title = minimized ? 'Expand panel' : 'Minimize panel';
+}
+
+// ============================================================================
+// WEBSOCKET
+// ============================================================================
+function setBadge(state) {
+  const b = document.getElementById('conn-badge');
+  b.className = 'conn-badge ' + state;
+  b.textContent = state.toUpperCase();
+}
+
+function connectWebSocket() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws?token=${encodeURIComponent(apiKey)}&sim_id=${SIM_ID}`);
+  ws.binaryType = 'arraybuffer';
+  setBadge('connecting');
+
+  ws.onopen = () => {
+    isConnected = true;
+    setBadge('connected');
+    document.getElementById('disconnect-overlay').classList.remove('show');
+    document.getElementById('info').innerHTML = '<b>💥 BIG BANG SIM</b><br>Connected · Leapfrog · CPU';
+    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+  };
+
+  ws.onmessage = e => {
+    let msg;
+    if (e.data instanceof ArrayBuffer)
+      msg = MessagePack.decode(new Uint8Array(e.data));
+    else
+      msg = JSON.parse(e.data);
+    handleMessage(msg);
+  };
+
+  ws.onerror = () => { if (!isNavigatingHome) { isConnected = false; setBadge('disconnected'); } };
+
+  ws.onclose = event => {
+    if (isNavigatingHome) return;
+    const was = isConnected;
+    isConnected = false;
+    setBadge('disconnected');
+    if (event.code === 1008) { window.location.href = '/'; return; }
+    if (was) {
+      document.getElementById('disconnect-overlay').classList.add('show');
+      if (!wsReconnectTimer)
+        wsReconnectTimer = setTimeout(() => { wsReconnectTimer = null; reconnect(); }, 3000);
+    }
+  };
+}
+
+function reconnect() {
+  try { if (ws) ws.close(); } catch(e) {}
+  connectWebSocket();
+}
+
+// ============================================================================
+// MESSAGE HANDLING
+// ============================================================================
+function handleMessage(msg) {
+  const t = msg.type;
+  if (t === 'ping') {
+    if (ws.readyState === WebSocket.OPEN)
+      ws.send(MessagePack.encode({ type: 'pong' }));
+    return;
+  }
+  if (t === 'ready')    { handleReady(msg.data);    return; }
+  if (t === 'progress') { handleProgress(msg.data); return; }
+  if (t === 'replay')   { handleReplay(msg.data);   return; }
+  if (t === 'error')    { handleError(msg.data);    return; }
+}
+
+function handleReady(data) {
+  document.getElementById('info').innerHTML =
+    '<b>💥 BIG BANG SIM</b><br>Ready · set params &amp; run';
+  setRunning(false);
+}
+
+function handleProgress(data) {
+  const pct = data.pct || 0;
+  document.getElementById('progress-bar').style.width = pct + '%';
+  document.getElementById('progress-label').textContent =
+    `${pct}%  (step ${data.step || 0} / ${data.total_steps || 0})`;
+}
+
+function handleReplay(data) {
+  setRunning(false);
+  buildReplay(data);
+}
+
+function handleError(data) {
+  setRunning(false);
+  const msg = data.message || 'Unknown error';
+  if (msg === 'cancelled') return;
+  document.getElementById('info').innerHTML =
+    `<b>💥 BIG BANG SIM</b><br><span style="color:var(--danger)">Error: ${msg}</span>`;
+}
+
+// ============================================================================
+// SIMULATION COMMANDS
+// ============================================================================
+function runSimulation() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const n        = parseInt(document.getElementById('paramN').value);
+  const steps    = parseInt(document.getElementById('paramSteps').value);
+  const v_radial = parseFloat(document.getElementById('paramVRadial').value);
+  const r_max    = parseFloat(document.getElementById('paramRMax').value);
+  const soft     = parseFloat(document.getElementById('paramSoft').value);
+
+  clearReplay();
+  setRunning(true);
+
+  ws.send(MessagePack.encode({
+    type: 'run_simulation',
+    data: { n, steps, v_radial, r_max, softening: soft, dt: 0.01, replay_every: 20 }
+  }));
+}
+
+function cancelSimulation() {
+  if (ws && ws.readyState === WebSocket.OPEN)
+    ws.send(MessagePack.encode({ type: 'stop_simulation' }));
+  setRunning(false);
+}
+
+function setRunning(running) {
+  document.getElementById('progress-section').style.display = running ? 'block' : 'none';
+  document.getElementById('runBtn').disabled = running;
+  if (!running) {
+    document.getElementById('progress-bar').style.width = '0%';
+    document.getElementById('progress-label').textContent = '0%';
+  }
+}
+
+// ============================================================================
+// REPLAY
+// ============================================================================
+function buildReplay(data) {
+  // data.frames: array of frames, each frame is array of [x,y,z] or flat numbers
+  // data.n: particle count
+  // data.steps: array of step indices
+  const frames = data.frames || data.positions || [];
+  const n = data.n || (frames[0] ? (Array.isArray(frames[0][0]) ? frames[0].length : frames[0].length / 3) : 0);
+
+  replayN = n;
+  replayFrames = frames.map(f => {
+    // Handle both nested [[x,y,z],...] and flat [x,y,z,x,y,z,...] formats
+    if (Array.isArray(f[0])) {
+      const flat = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) {
+        flat[i*3]   = f[i][0];
+        flat[i*3+1] = f[i][1];
+        flat[i*3+2] = f[i][2];
+      }
+      return flat;
+    } else {
+      return new Float32Array(f);
+    }
+  });
+
+  if (replayFrames.length === 0) return;
+
+  // Build particle geometry
+  buildParticleSystem(n);
+
+  // Set timeline
+  const slider = document.getElementById('timelineSlider');
+  slider.max = replayFrames.length - 1;
+  slider.value = 0;
+  document.getElementById('totalFramesLabel').textContent = `/ ${replayFrames.length}`;
+  document.getElementById('playback-section').style.display = 'block';
+
+  const totalSteps = data.steps ? data.steps[data.steps.length - 1] : 0;
+  document.getElementById('replayStats').innerHTML =
+    `Particles: ${n}<br>Frames: ${replayFrames.length}<br>Steps: ${totalSteps}`;
+
+  currentFrame = 0;
+  showFrame(0);
+  autoRotate = true;
+
+  document.getElementById('info').innerHTML =
+    `<b>💥 BIG BANG SIM</b><br>Replay ready · ${replayFrames.length} frames`;
+}
+
+function buildParticleSystem(n) {
+  // Remove old
+  if (particleSystem) {
+    scene.remove(particleSystem);
+    if (particleGeo) particleGeo.dispose();
+  }
+
+  particleGeo = new THREE.BufferGeometry();
+  const positions = new Float32Array(n * 3);
+  particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  // Color by speed — set uniform warm-to-cool gradient based on particle index
+  const colors = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const t = i / n;
+    // Warm core → cool outer: orange → cyan → white
+    colors[i*3]   = 0.9 + t * 0.1;
+    colors[i*3+1] = 0.3 + t * 0.6;
+    colors[i*3+2] = 0.1 + t * 0.9;
+  }
+  particleGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+  const ptSize = parseFloat(document.getElementById('ptSizeSlider').value);
+  const mat = new THREE.PointsMaterial({
+    size: ptSize * 0.05,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.85,
+    sizeAttenuation: true,
+  });
+
+  particleSystem = new THREE.Points(particleGeo, mat);
+  scene.add(particleSystem);
+}
+
+function showFrame(idx) {
+  if (!particleGeo || !replayFrames[idx]) return;
+  const posAttr = particleGeo.attributes.position;
+  const frame = replayFrames[idx];
+  for (let i = 0; i < replayN; i++) {
+    posAttr.setXYZ(i, frame[i*3], frame[i*3+1], frame[i*3+2]);
+  }
+  posAttr.needsUpdate = true;
+  document.getElementById('frameLabel').textContent = `Frame ${idx}`;
+  document.getElementById('timelineSlider').value = idx;
+}
+
+function clearReplay() {
+  stopPlay();
+  replayFrames = [];
+  replayN = 0;
+  currentFrame = 0;
+  document.getElementById('playback-section').style.display = 'none';
+  if (particleSystem) { scene.remove(particleSystem); particleSystem = null; }
+  if (particleGeo)    { particleGeo.dispose(); particleGeo = null; }
+}
+
+// ============================================================================
+// PLAYBACK CONTROLS
+// ============================================================================
+function togglePlay() {
+  isPlaying ? stopPlay() : startPlay();
+}
+
+function startPlay() {
+  if (replayFrames.length === 0) return;
+  isPlaying = true;
+  document.getElementById('playBtn').textContent = '⏸ Pause';
+  document.getElementById('playBtn').classList.add('playing');
+  clearInterval(playInterval);
+  playInterval = setInterval(() => {
+    currentFrame = (currentFrame + playSpeed) % replayFrames.length;
+    showFrame(currentFrame);
+    if (currentFrame === 0) stopPlay(); // stop at end, don't loop
+  }, 33); // ~30fps
+}
+
+function stopPlay() {
+  isPlaying = false;
+  clearInterval(playInterval);
+  document.getElementById('playBtn').textContent = '▶ Play';
+  document.getElementById('playBtn').classList.remove('playing');
+}
+
+function resetPlayback() {
+  stopPlay();
+  currentFrame = 0;
+  showFrame(0);
+}
+
+// ============================================================================
+// THREE.JS INIT
+// ============================================================================
+function init() {
+  scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x000510, 0.006);
+
+  camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.01, 2000);
+  camera.position.set(0, 4, 8);
+  camera.lookAt(0, 0, 0);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  document.body.insertBefore(renderer.domElement, document.body.firstChild);
+
+  // Starfield
+  const starGeo = new THREE.BufferGeometry();
+  const NS = 8000;
+  const sPos = new Float32Array(NS * 3), sCol = new Float32Array(NS * 3);
+  for (let i = 0; i < NS; i++) {
+    const i3 = i * 3, r = 200 + Math.random() * 800;
+    const th = Math.random() * Math.PI * 2, ph = Math.random() * Math.PI;
+    sPos[i3]   = r * Math.sin(ph) * Math.cos(th);
+    sPos[i3+1] = r * Math.sin(ph) * Math.sin(th);
+    sPos[i3+2] = r * Math.cos(ph);
+    const b = 0.4 + Math.random() * 0.6;
+    sCol[i3] = b; sCol[i3+1] = b; sCol[i3+2] = b;
+  }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+  starGeo.setAttribute('color',    new THREE.BufferAttribute(sCol, 3));
+  scene.add(new THREE.Points(starGeo,
+    new THREE.PointsMaterial({ size: 0.5, vertexColors: true, transparent: true, opacity: 0.7 })));
+
+  // Ambient glow
+  scene.add(new THREE.AmbientLight(0x202030, 2));
+
+  bindInputs();
+  connectWebSocket();
+  animate();
+}
+
+// ============================================================================
+// ANIMATE
+// ============================================================================
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (autoRotate) {
+    const t = Date.now() * 0.00005;
+    cameraTheta = t * 0.15;
+  }
+
+  camera.position.x = Math.sin(cameraPhi) * Math.sin(cameraTheta) * cameraRadius;
+  camera.position.y = Math.cos(cameraPhi) * cameraRadius;
+  camera.position.z = Math.sin(cameraPhi) * Math.cos(cameraTheta) * cameraRadius;
+  camera.lookAt(0, 0, 0);
+
+  renderer.render(scene, camera);
+}
+
+// ============================================================================
+// INPUT BINDINGS
+// ============================================================================
+function bindInputs() {
+  window.addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    cameraTheta -= ((e.clientX - prevMouseX) / innerWidth) * Math.PI * 2;
+    cameraPhi    = Math.max(0.05, Math.min(Math.PI * 0.55,
+                    cameraPhi + ((e.clientY - prevMouseY) / innerHeight) * Math.PI));
+    prevMouseX = e.clientX; prevMouseY = e.clientY;
+    autoRotate = false;
+  });
+
+  document.addEventListener('mousedown', e => {
+    if (e.target.tagName !== 'CANVAS') return;
+    isDragging = true;
+    prevMouseX = e.clientX; prevMouseY = e.clientY;
+  });
+
+  document.addEventListener('mouseup', () => isDragging = false);
+
+  document.addEventListener('wheel', e => {
+    e.preventDefault();
+    cameraRadius = Math.max(1, Math.min(200, cameraRadius + e.deltaY * 0.02));
+    autoRotate = false;
+  }, { passive: false });
+
+  // Parameter sliders
+  const paramBindings = [
+    ['paramN',       'paramNVal',       v => Math.round(v)],
+    ['paramSteps',   'paramStepsVal',   v => Math.round(v)],
+    ['paramVRadial', 'paramVRadialVal', v => parseFloat(v).toFixed(1)],
+    ['paramRMax',    'paramRMaxVal',    v => parseFloat(v).toFixed(1)],
+    ['paramSoft',    'paramSoftVal',    v => parseFloat(v).toFixed(2)],
+  ];
+  paramBindings.forEach(([id, valId, fmt]) => {
+    document.getElementById(id).addEventListener('input', e => {
+      document.getElementById(valId).textContent = fmt(e.target.value);
+    });
+  });
+
+  // Timeline scrubber
+  document.getElementById('timelineSlider').addEventListener('input', e => {
+    stopPlay();
+    currentFrame = parseInt(e.target.value);
+    showFrame(currentFrame);
+  });
+
+  // Speed slider
+  document.getElementById('speedSlider').addEventListener('input', e => {
+    playSpeed = parseInt(e.target.value);
+    document.getElementById('speedVal').textContent = playSpeed + '×';
+    if (isPlaying) { stopPlay(); startPlay(); }
+  });
+
+  // Particle size slider
+  document.getElementById('ptSizeSlider').addEventListener('input', e => {
+    const sz = parseFloat(e.target.value);
+    document.getElementById('ptSizeVal').textContent = sz.toFixed(1);
+    if (particleSystem) particleSystem.material.size = sz * 0.05;
+  });
+}
+
+window.addEventListener('popstate', () => navigateHome());
+init();
+</script>
+</body>
+</html>
